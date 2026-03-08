@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { HanziHandwritingAnswer } from "@/components/hanzi-handwriting-answer";
 import { HanziWritingPractice } from "@/components/hanzi-writing-practice";
 import { PronunciationChecker } from "@/components/pronunciation-checker";
 import { useStudy } from "@/context/study-context";
@@ -72,6 +73,7 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
   const [audioNotice, setAudioNotice] = useState<string | null>(null);
   const [pronunciationAssessment, setPronunciationAssessment] = useState<PronunciationAssessment | null>(null);
   const [hintFlags, setHintFlags] = useState<HintFlags>({ pinyin: false, audio: false });
+  const [showHandwritingPad, setShowHandwritingPad] = useState(false);
   const startedAtRef = useRef(0);
   const addStudyTimeRef = useRef(addStudyTime);
 
@@ -105,6 +107,7 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
     setAudioNotice(null);
     setPronunciationAssessment(null);
     setHintFlags({ pinyin: false, audio: false });
+    setShowHandwritingPad(false);
   }, [currentCard?.id]);
 
   useEffect(() => {
@@ -209,6 +212,7 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
   }
 
   const prompt = getPrompt(currentCard);
+  const isHanziRecallStage = currentCard.currentStage === "translation_to_hanzi";
   const isPronunciationStage = currentCard.currentStage === "hanzi_to_pronunciation";
   const hintUsed = hasHintUsed(hintFlags);
   const cardClass =
@@ -300,6 +304,16 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
                     </button>
                   </div>
 
+                  {isHanziRecallStage ? (
+                    <button
+                      type="button"
+                      className="btn-ghost w-full max-w-xl"
+                      onClick={() => setShowHandwritingPad((value) => !value)}
+                    >
+                      {showHandwritingPad ? "Скрыть поле письма" : "Нарисовать иероглиф"}
+                    </button>
+                  ) : null}
+
                   <button
                     type="button"
                     className="btn-primary w-full max-w-xl px-6 py-4 text-base shadow-[0_20px_48px_rgba(var(--accent),0.32)]"
@@ -316,6 +330,19 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
                   ) : null}
 
                   {audioNotice ? <p className="text-sm text-[rgb(var(--accent))]">{audioNotice}</p> : null}
+
+                  {isHanziRecallStage && showHandwritingPad ? (
+                    <div className="w-full max-w-4xl text-left">
+                      <HanziHandwritingAnswer
+                        hanzi={currentCard.hanzi}
+                        title="Письмо по памяти"
+                        description="Попробуйте написать иероглиф до открытия ответа. Этот блок не показывает правильный ответ автоматически."
+                        resetLabel="Очистить"
+                        readyMessage="Все знаки написаны. Теперь можно открыть ответ и сверить себя."
+                        showHintAfterMisses={false}
+                      />
+                    </div>
+                  ) : null}
 
                   <p className="max-w-xl text-sm muted-text">
                     Карточка показывает текущий этап освоения. Сначала смысл, затем обратное вспоминание, чтение и

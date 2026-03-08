@@ -18,10 +18,23 @@ export type HandwritingAnswerState = {
 
 type HanziHandwritingAnswerProps = {
   hanzi: string;
-  onChange: (state: HandwritingAnswerState) => void;
+  onChange?: (state: HandwritingAnswerState) => void;
+  title?: string;
+  description?: string;
+  resetLabel?: string;
+  readyMessage?: string;
+  showHintAfterMisses?: number | false;
 };
 
-export function HanziHandwritingAnswer({ hanzi, onChange }: HanziHandwritingAnswerProps) {
+export function HanziHandwritingAnswer({
+  hanzi,
+  onChange,
+  title = "Рукописный ответ",
+  description = "Напишите иероглифы рукой. Ответ засчитается после завершения всех знаков.",
+  resetLabel = "Начать заново",
+  readyMessage = "Рукописный ответ готов к проверке.",
+  showHintAfterMisses = 2,
+}: HanziHandwritingAnswerProps) {
   const characters = useMemo(() => extractHanziCharacters(hanzi), [hanzi]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [completed, setCompleted] = useState<boolean[]>([]);
@@ -44,7 +57,7 @@ export function HanziHandwritingAnswer({ hanzi, onChange }: HanziHandwritingAnsw
 
   useEffect(() => {
     const completedCharacters = completed.filter(Boolean).length;
-    onChange({
+    onChange?.({
       isReady: characters.length > 0 && completedCharacters === characters.length,
       answer: characters.join(""),
       totalCharacters: characters.length,
@@ -91,7 +104,7 @@ export function HanziHandwritingAnswer({ hanzi, onChange }: HanziHandwritingAnsw
 
         void writer.quiz?.({
           leniency: 1,
-          showHintAfterMisses: 2,
+          showHintAfterMisses,
           highlightOnComplete: true,
           onMistake: (strokeData: { totalMistakes: number }) => {
             if (!disposed) {
@@ -129,7 +142,7 @@ export function HanziHandwritingAnswer({ hanzi, onChange }: HanziHandwritingAnsw
         containerRef.current.innerHTML = "";
       }
     };
-  }, [activeIndex, characters, completed, resetToken]);
+  }, [activeIndex, characters, completed, resetToken, showHintAfterMisses]);
 
   if (!characters.length) {
     return null;
@@ -142,8 +155,8 @@ export function HanziHandwritingAnswer({ hanzi, onChange }: HanziHandwritingAnsw
     <div className="grid gap-4 rounded-[28px] border border-white/10 bg-white/5 p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold">Рукописный ответ</p>
-          <p className="mt-1 text-sm muted-text">Напишите иероглифы рукой. Ответ засчитается после завершения всех знаков.</p>
+          <p className="text-sm font-semibold">{title}</p>
+          <p className="mt-1 text-sm muted-text">{description}</p>
         </div>
         <button
           type="button"
@@ -156,7 +169,7 @@ export function HanziHandwritingAnswer({ hanzi, onChange }: HanziHandwritingAnsw
             setResetToken((value) => value + 1);
           }}
         >
-          Начать заново
+          {resetLabel}
         </button>
       </div>
 
@@ -193,7 +206,7 @@ export function HanziHandwritingAnswer({ hanzi, onChange }: HanziHandwritingAnsw
           <p className="mt-2 text-sm muted-text">
             Режим специально не показывает контур, чтобы ответ оставался именно вспоминанием.
           </p>
-          {isReady ? <p className="mt-3 text-sm text-[rgb(var(--success))]">Рукописный ответ готов к проверке.</p> : null}
+          {isReady ? <p className="mt-3 text-sm text-[rgb(var(--success))]">{readyMessage}</p> : null}
         </div>
 
         <div className="rounded-[28px] border border-white/10 bg-[rgba(var(--foreground),0.03)] p-4">
