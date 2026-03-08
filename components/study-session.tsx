@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { HanziWritingPractice } from "@/components/hanzi-writing-practice";
 import { PronunciationChecker } from "@/components/pronunciation-checker";
 import { useStudy } from "@/context/study-context";
 import { pronunciationEngine } from "@/lib/audio";
@@ -138,15 +139,20 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
     markHintUsed("pinyin");
   }
 
-  async function handlePlayPronunciation() {
+  async function handlePlayPronunciation(options?: { countsAsHint?: boolean }) {
     if (!currentCard) {
       return;
     }
 
+    const countsAsHint = options?.countsAsHint ?? true;
+
     setAudioNotice(null);
     const played = await pronunciationEngine.play(currentCard);
-    if (played) {
+    if (played && countsAsHint) {
       markHintUsed("audio");
+    }
+
+    if (played) {
       return;
     }
 
@@ -288,7 +294,7 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
                     <button
                       type="button"
                       className="btn-ghost w-full justify-between px-5 py-4 text-left"
-                      onClick={handlePlayPronunciation}
+                      onClick={() => void handlePlayPronunciation()}
                     >
                       Голосовая подсказка
                     </button>
@@ -365,7 +371,11 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
                     <button type="button" className="btn-ghost" onClick={() => setRevealed(false)}>
                       Назад к вопросу
                     </button>
-                    <button type="button" className="btn-secondary" onClick={handlePlayPronunciation}>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => void handlePlayPronunciation({ countsAsHint: false })}
+                    >
                       Прослушать
                     </button>
                   </div>
@@ -381,6 +391,8 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
                     <p className="mt-3 text-xl font-semibold">{currentCard.translation}</p>
                   </div>
                 </div>
+
+                <HanziWritingPractice text={currentCard.hanzi} />
 
                 {isPronunciationStage ? (
                   <PronunciationChecker card={currentCard} onAssessmentChange={setPronunciationAssessment} compact />

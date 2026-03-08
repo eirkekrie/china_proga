@@ -90,6 +90,10 @@ export function normalizePinyin(value: string) {
   return normalizeText(value).replace(/u:/g, "u").replace(/v/g, "u");
 }
 
+export function extractHanziCharacters(value: string) {
+  return [...value].filter((char) => /\p{Script=Han}/u.test(char));
+}
+
 export function buildCardKey(card: Pick<Card, "hanzi" | "pinyin" | "translation">) {
   return `${normalizeText(card.hanzi)}|${normalizePinyin(card.pinyin)}|${normalizeText(card.translation)}`;
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { HanziHandwritingAnswer, type HandwritingAnswerState } from "@/components/hanzi-handwriting-answer";
 import { PronunciationChecker } from "@/components/pronunciation-checker";
 import { useStudy } from "@/context/study-context";
 import { pronunciationEngine } from "@/lib/audio";
@@ -41,6 +42,7 @@ function hasHintUsed(hints: HintFlags) {
 export function TestSession() {
   const { addStudyTime, answerCard, cards, getQueue, hydrated, stats } = useStudy();
   const [mode, setMode] = useState<LearningStage>("hanzi_to_translation");
+  const [translationAnswerMode, setTranslationAnswerMode] = useState<"choice" | "handwriting">("choice");
   const queue = getQueue("test", mode);
 
   const [currentCardId, setCurrentCardId] = useState<string | null>(null);
@@ -53,6 +55,7 @@ export function TestSession() {
   const [result, setResult] = useState<{ isCorrect: boolean; expected: string; grade: ReviewGrade } | null>(null);
   const [audioNotice, setAudioNotice] = useState<string | null>(null);
   const [pronunciationAssessment, setPronunciationAssessment] = useState<PronunciationAssessment | null>(null);
+  const [handwritingState, setHandwritingState] = useState<HandwritingAnswerState | null>(null);
   const startedAtRef = useRef(0);
   const addStudyTimeRef = useRef(addStudyTime);
 
@@ -71,6 +74,11 @@ export function TestSession() {
     setResult(null);
     setAudioNotice(null);
     setPronunciationAssessment(null);
+    setHandwritingState(null);
+
+    if (mode !== "translation_to_hanzi") {
+      setTranslationAnswerMode("choice");
+    }
   }, [mode]);
 
   useEffect(() => {
@@ -98,7 +106,18 @@ export function TestSession() {
     setResult(null);
     setAudioNotice(null);
     setPronunciationAssessment(null);
+    setHandwritingState(null);
   }, [currentCard?.id]);
+
+  useEffect(() => {
+    if (mode !== "translation_to_hanzi") {
+      return;
+    }
+
+    setSelectedOption(null);
+    setResult(null);
+    setHandwritingState(null);
+  }, [mode, translationAnswerMode]);
 
   useEffect(() => {
     if (!currentCard || (mode !== "hanzi_to_translation" && mode !== "translation_to_hanzi")) {
@@ -168,9 +187,17 @@ export function TestSession() {
     let isCorrect = false;
     let grade: ReviewGrade = "again";
 
-    if (mode === "hanzi_to_translation" || mode === "translation_to_hanzi") {
+    if (mode === "hanzi_to_translation" || (mode === "translation_to_hanzi" && translationAnswerMode === "choice")) {
       isCorrect = selectedOption === (mode === "translation_to_hanzi" ? currentCard.hanzi : currentCard.translation);
       grade = isCorrect ? (hintUsed || responseTimeMs > 12000 ? "hard" : "good") : "again";
+    } else if (mode === "translation_to_hanzi") {
+      isCorrect = Boolean(handwritingState?.isReady);
+      grade =
+        isCorrect && handwritingState
+          ? hintUsed || responseTimeMs > 12000 || handwritingState.totalMistakes > 0
+            ? "hard"
+            : "good"
+          : "again";
     } else if (mode === "hanzi_to_pronunciation") {
       if (!pronunciationAssessment) {
         return;
@@ -223,6 +250,7 @@ export function TestSession() {
 
   const promptLead = mode === "translation_to_hanzi" ? currentCard.translation : currentCard.hanzi;
   const isPronunciationMode = mode === "hanzi_to_pronunciation";
+  const isHandwritingMode = mode === "translation_to_hanzi" && translationAnswerMode === "handwriting";
   const hintUsed = hasHintUsed(hintFlags);
   const placeholder = mode === "hanzi_to_pinyin" ? "Введите пиньинь" : "Введите произношение / пиньинь";
   const supportLine = mode === "hanzi_to_pinyin" ? currentCard.translation : null;
@@ -278,7 +306,9 @@ export function TestSession() {
                 <p className="mt-4 text-sm uppercase tracking-[0.18em] subtle-text">Задание</p>
                 <p className="mt-2 text-2xl font-semibold tracking-[-0.04em]">
                   {mode === "translation_to_hanzi"
-                    ? "Выберите иероглиф по переводу"
+                    ? isHandwritingMode
+                      ? "Напишите иероглиф по переводу"
+                      : "Выберите иероглиф по переводу"
                     : mode === "hanzi_to_translation"
                       ? "Выберите правильный перевод"
                       : isPronunciationMode
@@ -288,6 +318,24 @@ export function TestSession() {
                 <p className="mt-2 text-xs uppercase tracking-[0.16em] subtle-text">
                   Подсказки открываются только по требованию
                 </p>
+                {mode === "translation_to_hanzi" ? (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className={translationAnswerMode === "choice" ? "btn-secondary" : "btn-ghost"}
+                      onClick={() => setTranslationAnswerMode("choice")}
+                    >
+                      Выбор
+                    </button>
+                    <button
+                      type="button"
+                      className={translationAnswerMode === "handwriting" ? "btn-secondary" : "btn-ghost"}
+                      onClick={() => setTranslationAnswerMode("handwriting")}
+                    >
+                      Письмо
+                    </button>
+                  </div>
+                ) : null}
               </div>
 
               <div className="flex h-fit flex-wrap gap-2">
@@ -328,7 +376,9 @@ export function TestSession() {
               {supportLine ? <p className="mt-3 muted-text">{supportLine}</p> : null}
             </div>
 
-            {choiceOptions.length > 0 ? (
+            {isHandwritingMode ? (
+              <HanziHandwritingAnswer hanzi={currentCard.hanzi} onChange={setHandwritingState} />
+            ) : choiceOptions.length > 0 ? (
               <div className="grid gap-3">
                 {choiceOptions.map((option) => (
                   <button
@@ -364,6 +414,12 @@ export function TestSession() {
             {hintUsed && !result ? (
               <p className="text-sm text-[rgb(var(--warning))]">
                 Подсказки использованы. Верный ответ будет засчитан максимум как «Трудно».
+              </p>
+            ) : null}
+            {isHandwritingMode && handwritingState && !result ? (
+              <p className="text-sm muted-text">
+                Рукописный ответ: {handwritingState.completedCharacters}/{handwritingState.totalCharacters} знаков · ошибок{" "}
+                {handwritingState.totalMistakes}.
               </p>
             ) : null}
 
@@ -402,15 +458,23 @@ export function TestSession() {
                 type="button"
                 className="btn-primary"
                 disabled={
-                  mode === "hanzi_to_translation" || mode === "translation_to_hanzi"
+                  mode === "hanzi_to_translation"
                     ? !selectedOption
+                    : mode === "translation_to_hanzi"
+                      ? isHandwritingMode
+                        ? !handwritingState?.isReady
+                        : !selectedOption
                     : isPronunciationMode
                       ? !pronunciationAssessment
                       : !textAnswer.trim()
                 }
                 onClick={handleSubmit}
               >
-                {isPronunciationMode ? "Засчитать произношение" : "Проверить ответ"}
+                {isPronunciationMode
+                  ? "Засчитать произношение"
+                  : isHandwritingMode
+                    ? "Засчитать рукописный ответ"
+                    : "Проверить ответ"}
               </button>
             )}
           </div>
