@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { pronunciationEngine } from "@/lib/audio";
-import { REVIEW_GRADE_LABELS, STAGE_LABELS, STAGE_SHORT_LABELS } from "@/lib/constants";
 import { PronunciationChecker } from "@/components/pronunciation-checker";
 import { useStudy } from "@/context/study-context";
+import { pronunciationEngine } from "@/lib/audio";
+import { REVIEW_GRADE_LABELS, STAGE_LABELS, STAGE_SHORT_LABELS } from "@/lib/constants";
 import { compareAnswer, formatDuration, shuffleArray } from "@/lib/utils";
 import type { Card, DerivedCard, LearningStage, PronunciationAssessment, ReviewGrade, TestOption } from "@/lib/types";
 
@@ -14,6 +14,11 @@ const modes: LearningStage[] = [
   "hanzi_to_pinyin",
   "hanzi_to_pronunciation",
 ];
+
+type HintFlags = {
+  pinyin: boolean;
+  audio: boolean;
+};
 
 function buildOptions(cards: Card[], currentCard: DerivedCard, mode: LearningStage) {
   const distractors = shuffleArray(cards.filter((card) => card.id !== currentCard.id)).slice(0, 3);
@@ -29,6 +34,10 @@ function buildOptions(cards: Card[], currentCard: DerivedCard, mode: LearningSta
   return shuffleArray([currentCard, ...distractors].map(toOption));
 }
 
+function hasHintUsed(hints: HintFlags) {
+  return hints.pinyin || hints.audio;
+}
+
 export function TestSession() {
   const { addStudyTime, answerCard, cards, getQueue, hydrated, stats } = useStudy();
   const [mode, setMode] = useState<LearningStage>("hanzi_to_translation");
@@ -39,6 +48,8 @@ export function TestSession() {
   const [choiceOptions, setChoiceOptions] = useState<TestOption[]>([]);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [textAnswer, setTextAnswer] = useState("");
+  const [showPinyinHint, setShowPinyinHint] = useState(false);
+  const [hintFlags, setHintFlags] = useState<HintFlags>({ pinyin: false, audio: false });
   const [result, setResult] = useState<{ isCorrect: boolean; expected: string; grade: ReviewGrade } | null>(null);
   const [audioNotice, setAudioNotice] = useState<string | null>(null);
   const [pronunciationAssessment, setPronunciationAssessment] = useState<PronunciationAssessment | null>(null);
@@ -55,6 +66,8 @@ export function TestSession() {
     setCurrentCardId(null);
     setSelectedOption(null);
     setTextAnswer("");
+    setShowPinyinHint(false);
+    setHintFlags({ pinyin: false, audio: false });
     setResult(null);
     setAudioNotice(null);
     setPronunciationAssessment(null);
@@ -80,6 +93,8 @@ export function TestSession() {
     startedAtRef.current = performance.now();
     setSelectedOption(null);
     setTextAnswer("");
+    setShowPinyinHint(false);
+    setHintFlags({ pinyin: false, audio: false });
     setResult(null);
     setAudioNotice(null);
     setPronunciationAssessment(null);
@@ -108,18 +123,39 @@ export function TestSession() {
     return () => window.clearInterval(timer);
   }, []);
 
-  async function handlePronunciationPreview() {
+  function markHintUsed(kind: keyof HintFlags) {
+    setHintFlags((previous) => {
+      if (previous[kind]) {
+        return previous;
+      }
+
+      return {
+        ...previous,
+        [kind]: true,
+      };
+    });
+  }
+
+  function handleShowPinyinHint() {
+    setShowPinyinHint(true);
+    markHintUsed("pinyin");
+  }
+
+  async function handleAudioHint() {
     if (!currentCard) {
       return;
     }
 
     setAudioNotice(null);
     const played = await pronunciationEngine.play(currentCard);
-    if (!played) {
-      setAudioNotice(
-        "Не удалось запустить ни локальный Qwen TTS, ни браузерный голос. Проверьте, что Qwen-сервер запущен, `.env.local` заполнен, а в системе доступен китайский голос.",
-      );
+    if (played) {
+      markHintUsed("audio");
+      return;
     }
+
+    setAudioNotice(
+      "Не удалось запустить ни готовое аудио, ни локальный Qwen3-TTS, ни системный голос браузера.",
+    );
   }
 
   function handleSubmit() {
@@ -128,22 +164,23 @@ export function TestSession() {
     }
 
     const responseTimeMs = Math.max(800, Math.round(performance.now() - startedAtRef.current));
+    const hintUsed = hasHintUsed(hintFlags);
     let isCorrect = false;
     let grade: ReviewGrade = "again";
 
     if (mode === "hanzi_to_translation" || mode === "translation_to_hanzi") {
       isCorrect = selectedOption === (mode === "translation_to_hanzi" ? currentCard.hanzi : currentCard.translation);
-      grade = isCorrect ? (responseTimeMs > 12000 ? "hard" : "good") : "again";
+      grade = isCorrect ? (hintUsed || responseTimeMs > 12000 ? "hard" : "good") : "again";
     } else if (mode === "hanzi_to_pronunciation") {
       if (!pronunciationAssessment) {
         return;
       }
 
-      grade = pronunciationAssessment.grade;
+      grade = hintUsed && pronunciationAssessment.grade === "good" ? "hard" : pronunciationAssessment.grade;
       isCorrect = grade !== "again";
     } else {
       isCorrect = compareAnswer(mode, textAnswer, currentCard);
-      grade = isCorrect ? (responseTimeMs > 12000 ? "hard" : "good") : "again";
+      grade = isCorrect ? (hintUsed || responseTimeMs > 12000 ? "hard" : "good") : "again";
     }
 
     answerCard(currentCard.id, grade, responseTimeMs);
@@ -186,6 +223,7 @@ export function TestSession() {
 
   const promptLead = mode === "translation_to_hanzi" ? currentCard.translation : currentCard.hanzi;
   const isPronunciationMode = mode === "hanzi_to_pronunciation";
+  const hintUsed = hasHintUsed(hintFlags);
   const placeholder = mode === "hanzi_to_pinyin" ? "Введите пиньинь" : "Введите произношение / пиньинь";
   const supportLine = mode === "hanzi_to_pinyin" ? currentCard.translation : null;
 
@@ -244,33 +282,49 @@ export function TestSession() {
                     : mode === "hanzi_to_translation"
                       ? "Выберите правильный перевод"
                       : isPronunciationMode
-                        ? "Произнесите слово по иероглифу и пиньиню"
+                        ? "Произнесите слово по иероглифу"
                         : "Введите пиньинь"}
                 </p>
-                <p className="mt-2 text-xs uppercase tracking-[0.16em] subtle-text">Готовый аудиофайл, локальный Qwen3-TTS или системный голос</p>
+                <p className="mt-2 text-xs uppercase tracking-[0.16em] subtle-text">
+                  Подсказки открываются только по требованию
+                </p>
               </div>
 
-              {isPronunciationMode ? (
-                <button type="button" className="btn-secondary h-fit" onClick={handlePronunciationPreview}>
-                  Прослушать
+              <div className="flex h-fit flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  disabled={showPinyinHint}
+                  onClick={handleShowPinyinHint}
+                >
+                  {showPinyinHint ? "Пиньинь открыт" : "Показать пиньинь"}
                 </button>
-              ) : null}
+                <button type="button" className="btn-ghost" onClick={handleAudioHint}>
+                  Голосовая подсказка
+                </button>
+              </div>
             </div>
 
             <div className="rounded-[32px] border border-white/10 bg-white/5 p-6 text-center">
               <p className="display-hanzi text-[clamp(3.4rem,10vw,6rem)] font-semibold leading-none">{promptLead}</p>
-              {isPronunciationMode ? (
+
+              {isPronunciationMode || showPinyinHint ? (
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-[22px] border border-white/10 bg-black/10 p-4 text-left">
-                    <p className="subtle-text text-xs uppercase tracking-[0.16em]">Пиньинь</p>
-                    <p className="mt-3 text-2xl font-semibold">{currentCard.pinyin}</p>
-                  </div>
-                  <div className="rounded-[22px] border border-white/10 bg-black/10 p-4 text-left">
-                    <p className="subtle-text text-xs uppercase tracking-[0.16em]">Перевод</p>
-                    <p className="mt-3 text-lg font-semibold">{currentCard.translation}</p>
-                  </div>
+                  {showPinyinHint ? (
+                    <div className="rounded-[22px] border border-white/10 bg-black/10 p-4 text-left">
+                      <p className="subtle-text text-xs uppercase tracking-[0.16em]">Пиньинь</p>
+                      <p className="mt-3 text-2xl font-semibold">{currentCard.pinyin}</p>
+                    </div>
+                  ) : null}
+                  {isPronunciationMode ? (
+                    <div className="rounded-[22px] border border-white/10 bg-black/10 p-4 text-left">
+                      <p className="subtle-text text-xs uppercase tracking-[0.16em]">Перевод</p>
+                      <p className="mt-3 text-lg font-semibold">{currentCard.translation}</p>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
+
               {supportLine ? <p className="mt-3 muted-text">{supportLine}</p> : null}
             </div>
 
@@ -306,6 +360,13 @@ export function TestSession() {
               </div>
             )}
 
+            {audioNotice && !result ? <p className="text-sm text-[rgb(var(--accent))]">{audioNotice}</p> : null}
+            {hintUsed && !result ? (
+              <p className="text-sm text-[rgb(var(--warning))]">
+                Подсказки использованы. Верный ответ будет засчитан максимум как «Трудно».
+              </p>
+            ) : null}
+
             {result ? (
               <div
                 className={[
@@ -320,9 +381,15 @@ export function TestSession() {
                 <p className="mt-2 text-sm muted-text">
                   Пиньинь: {currentCard.pinyin} · Перевод: {currentCard.translation}
                 </p>
+                {hintUsed ? (
+                  <p className="mt-2 text-sm text-[rgb(var(--warning))]">
+                    Для этой карточки использовались подсказки, поэтому максимум оценки ограничен уровнем «Трудно».
+                  </p>
+                ) : null}
                 {isPronunciationMode && pronunciationAssessment ? (
                   <p className="mt-2 text-sm muted-text">
-                    SenseVoice: {pronunciationAssessment.overallScore}% · рекомендация {REVIEW_GRADE_LABELS[pronunciationAssessment.grade]}.
+                    SenseVoice: {pronunciationAssessment.overallScore}% · рекомендация{" "}
+                    {REVIEW_GRADE_LABELS[pronunciationAssessment.grade]}.
                   </p>
                 ) : null}
                 {audioNotice ? <p className="mt-2 text-sm text-[rgb(var(--accent))]">{audioNotice}</p> : null}
@@ -381,7 +448,9 @@ export function TestSession() {
                 ? "Режим произношения доступен сразу для всех карточек, даже если слово ещё новое."
                 : "Тест использует реальные этапы карточек и обновляет память так же, как обучение."}
             </p>
-            <p className="mt-3">Если ответ быстрый и точный, растёт memory strength и сдвигается следующая дата повтора.</p>
+            <p className="mt-3">
+              Если ответ быстрый и точный, растёт memory strength и сдвигается следующая дата повтора.
+            </p>
             <p className="mt-3">При ошибке forgetting score растёт, а карточка снова попадает в повторение.</p>
           </div>
         </aside>
