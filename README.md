@@ -11,6 +11,59 @@ npm run dev
 
 После запуска откройте `http://localhost:3000`.
 
+Для автоматического старта локальных AI-сервисов добавлены команды:
+
+```bash
+npm run services
+```
+
+Запускает сразу оба Python-сервиса:
+
+- `scripts/qwen_tts_server.py`
+- `scripts/pronunciation_server.py`
+
+И полная локальная команда:
+
+```bash
+npm run dev:full
+```
+
+Она поднимает и оба Python-сервиса, и `next dev` в одном окне терминала.
+
+## SQLite
+
+Приложение теперь хранит состояние не только в `localStorage`, но и в SQLite через route `app/api/state/route.ts`.
+
+- файл базы по умолчанию: `data/hanzi-flow.db`
+- основное состояние: карточки, статистика и тема
+- `localStorage` оставлен как локальный кэш и fallback
+
+Путь к файлу можно переопределить через `DATABASE_PATH`.
+
+## Docker
+
+Для контейнерного запуска добавлены:
+
+- `Dockerfile`
+- `docker-compose.yml`
+
+Запуск:
+
+```bash
+docker compose up --build
+```
+
+По умолчанию контейнер публикуется на `http://localhost:3001`, а база сохраняется в каталоге `data/`.
+
+Если `3001` тоже занят, в PowerShell можно выбрать другой порт:
+
+```powershell
+$env:WEB_PORT=3002
+docker compose up --build
+```
+
+Если хотите использовать `3000`, сначала остановите локальный `npm run dev` или другой процесс, который уже слушает этот порт.
+
 ## Улучшенный TTS
 
 Для более качественного произношения приложение использует локальный `Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice` через серверный route `app/api/tts/route.ts` и отдельный Python-сервер `scripts/qwen_tts_server.py`.

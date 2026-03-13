@@ -51,6 +51,9 @@ export const STAGE_BASE_INTERVAL_DAYS: Record<LearningStage, number> = {
   hanzi_to_pronunciation: 2.4,
 };
 
+export const MAX_ACTIVE_LEARNING_CARDS = 3;
+export const MAX_NEW_CARDS_IN_LEARN_QUEUE = 1;
+
 export const STATUS_LABELS: Record<CardStatus, string> = {
   new: "Новая",
   learning: "В изучении",

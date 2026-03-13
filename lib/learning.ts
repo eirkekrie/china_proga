@@ -1,4 +1,6 @@
 import {
+  MAX_ACTIVE_LEARNING_CARDS,
+  MAX_NEW_CARDS_IN_LEARN_QUEUE,
   STAGE_BASE_INTERVAL_DAYS,
   STAGE_REQUIRED_STREAK,
   STAGE_SUCCESS_THRESHOLD,
@@ -159,30 +161,20 @@ export function buildStudyQueue(
       .sort(compareByUrgency);
   }
 
-  return derivedCards
-    .filter((card) => card.status !== "mastered" || card.computedStatus === "review")
+  const reviewCards = derivedCards
+    .filter((card) => (card.status !== "mastered" || card.computedStatus === "review") && (card.computedStatus === "review" || card.overdueLevel === "critical"))
+    .sort(compareByUrgency);
+  const reviewIds = new Set(reviewCards.map((card) => card.id));
+
+  const activeLearningCards = derivedCards
+    .filter(
+      (card) =>
+        !reviewIds.has(card.id) &&
+        card.status !== "new" &&
+        card.status !== "mastered" &&
+        card.computedStatus === "learning",
+    )
     .sort((left, right) => {
-      const groupOf = (card: DerivedCard) => {
-        if (card.computedStatus === "review" || card.overdueLevel === "critical") {
-          return 0;
-        }
-
-        if (card.status === "learning") {
-          return 1;
-        }
-
-        if (card.status === "new") {
-          return 2;
-        }
-
-        return 3;
-      };
-
-      const groupDelta = groupOf(left) - groupOf(right);
-      if (groupDelta !== 0) {
-        return groupDelta;
-      }
-
       const urgencyDelta = compareByUrgency(left, right);
       if (urgencyDelta !== 0) {
         return urgencyDelta;
@@ -193,7 +185,24 @@ export function buildStudyQueue(
       }
 
       return left.stageIndex - right.stageIndex;
-    });
+    })
+    .slice(0, MAX_ACTIVE_LEARNING_CARDS);
+
+  const shouldIntroduceNewCards = activeLearningCards.length < MAX_ACTIVE_LEARNING_CARDS;
+  const newCards = shouldIntroduceNewCards
+    ? derivedCards
+        .filter((card) => !reviewIds.has(card.id) && card.status === "new")
+        .sort((left, right) => {
+          if (left.repetitions !== right.repetitions) {
+            return left.repetitions - right.repetitions;
+          }
+
+          return left.createdAt.localeCompare(right.createdAt);
+        })
+        .slice(0, MAX_NEW_CARDS_IN_LEARN_QUEUE)
+    : [];
+
+  return [...reviewCards, ...activeLearningCards, ...newCards];
 }
 
 function calculateNextIntervalDays(

@@ -1,12 +1,12 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { applyReview, buildStudyQueue, computeDashboard } from "@/lib/learning";
 import { parseCardLines } from "@/lib/parser";
 import {
-  createSeedState,
   loadPersistedState,
+  normalizePersistedState,
   savePersistedState,
   type PersistedAppState,
 } from "@/lib/storage";
@@ -37,6 +37,25 @@ type StudyContextValue = {
 };
 
 const StudyContext = createContext<StudyContextValue | null>(null);
+
+function shouldPreferCachedState(cached: PersistedAppState, remote: PersistedAppState) {
+  const cachedPracticedCards = cached.cards.filter((card) => card.repetitions > 0 || card.status !== "new").length;
+  const remotePracticedCards = remote.cards.filter((card) => card.repetitions > 0 || card.status !== "new").length;
+
+  if (cached.cards.length !== remote.cards.length) {
+    return cached.cards.length > remote.cards.length;
+  }
+
+  if (cached.stats.totalReviews !== remote.stats.totalReviews) {
+    return cached.stats.totalReviews > remote.stats.totalReviews;
+  }
+
+  if (cached.stats.totalStudyTime !== remote.stats.totalStudyTime) {
+    return cached.stats.totalStudyTime > remote.stats.totalStudyTime;
+  }
+
+  return cachedPracticedCards > remotePracticedCards;
+}
 
 function touchStudyDay(stats: StudyStats, now: Date) {
   const today = dayKey(now);
@@ -92,16 +111,58 @@ function recordStudyTime(stats: StudyStats, now: Date, durationMs: number) {
 }
 
 export function StudyProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<PersistedAppState>(createSeedState());
+  const [state, setState] = useState<PersistedAppState>(loadPersistedState());
   const [hydrated, setHydrated] = useState(false);
+  const persistedJsonRef = useRef<string>("");
 
   useEffect(() => {
-    const loaded = loadPersistedState();
-    setState({
-      ...loaded,
-      stats: normalizeStatsForToday(loaded.stats, new Date()),
-    });
-    setHydrated(true);
+    let active = true;
+    const cached = loadPersistedState();
+
+    async function hydrate() {
+      try {
+        const response = await fetch("/api/state", {
+          method: "GET",
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to load state: ${response.status}`);
+        }
+
+        const loaded = normalizePersistedState((await response.json()) as Partial<PersistedAppState>);
+        if (!active) {
+          return;
+        }
+
+        const preferred = shouldPreferCachedState(cached, loaded) ? cached : loaded;
+        persistedJsonRef.current = JSON.stringify(preferred);
+        setState({
+          ...preferred,
+          stats: normalizeStatsForToday(preferred.stats, new Date()),
+        });
+      } catch {
+        if (!active) {
+          return;
+        }
+
+        persistedJsonRef.current = JSON.stringify(cached);
+        setState({
+          ...cached,
+          stats: normalizeStatsForToday(cached.stats, new Date()),
+        });
+      } finally {
+        if (active) {
+          setHydrated(true);
+        }
+      }
+    }
+
+    void hydrate();
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -110,6 +171,22 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     }
 
     savePersistedState(state);
+    const serialized = JSON.stringify(state);
+    if (serialized === persistedJsonRef.current) {
+      return;
+    }
+
+    persistedJsonRef.current = serialized;
+
+    void fetch("/api/state", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: serialized,
+    }).catch(() => {
+      persistedJsonRef.current = "";
+    });
   }, [hydrated, state]);
 
   useEffect(() => {

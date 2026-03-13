@@ -22,6 +22,12 @@ type HintFlags = {
   audio: boolean;
 };
 
+const AUDIO_SOURCE_LABELS = {
+  wav: "wav",
+  qwen: "qwen",
+  browser: "browser",
+} as const;
+
 const buttonStyles: Record<ReviewGrade, string> = {
   again: "btn-danger",
   hard: "btn-secondary",
@@ -64,6 +70,7 @@ function hasHintUsed(hints: HintFlags) {
 export function StudySession({ flow, title, description }: StudySessionProps) {
   const { addStudyTime, answerCard, getQueue, hydrated, metrics, stats } = useStudy();
   const queue = getQueue(flow);
+  const recentWindowSize = flow === "review" ? 4 : 6;
 
   const [currentCardId, setCurrentCardId] = useState<string | null>(null);
   const [revealed, setRevealed] = useState(false);
@@ -71,6 +78,7 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
   const [flashGrade, setFlashGrade] = useState<ReviewGrade | null>(null);
   const [cooldownIds, setCooldownIds] = useState<string[]>([]);
   const [audioNotice, setAudioNotice] = useState<string | null>(null);
+  const [audioSource, setAudioSource] = useState<keyof typeof AUDIO_SOURCE_LABELS | null>(null);
   const [pronunciationAssessment, setPronunciationAssessment] = useState<PronunciationAssessment | null>(null);
   const [hintFlags, setHintFlags] = useState<HintFlags>({ pinyin: false, audio: false });
   const [showHandwritingPad, setShowHandwritingPad] = useState(false);
@@ -105,6 +113,7 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
     setShowPinyinHint(false);
     setFlashGrade(null);
     setAudioNotice(null);
+    setAudioSource(null);
     setPronunciationAssessment(null);
     setHintFlags({ pinyin: false, audio: false });
     setShowHandwritingPad(false);
@@ -150,12 +159,14 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
     const countsAsHint = options?.countsAsHint ?? true;
 
     setAudioNotice(null);
-    const played = await pronunciationEngine.play(currentCard);
-    if (played && countsAsHint) {
+    const playback = await pronunciationEngine.play(currentCard);
+    setAudioSource(playback.source);
+
+    if (playback.played && countsAsHint) {
       markHintUsed("audio");
     }
 
-    if (played) {
+    if (playback.played) {
       return;
     }
 
@@ -174,7 +185,9 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
 
     answerCard(currentCard.id, effectiveGrade, responseTimeMs);
     setFlashGrade(effectiveGrade);
-    setCooldownIds((previous) => [...previous.filter((id) => id !== currentCard.id), currentCard.id].slice(-2));
+    setCooldownIds((previous) =>
+      [...previous.filter((id) => id !== currentCard.id), currentCard.id].slice(-recentWindowSize),
+    );
 
     window.setTimeout(() => {
       setCurrentCardId(null);
@@ -304,6 +317,12 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
                     </button>
                   </div>
 
+                  {audioSource ? (
+                    <div className="pill border-[rgba(var(--accent),0.24)] bg-[rgba(var(--accent),0.1)] text-[rgb(var(--accent))]">
+                      Источник озвучки: {AUDIO_SOURCE_LABELS[audioSource]}
+                    </div>
+                  ) : null}
+
                   {isHanziRecallStage ? (
                     <button
                       type="button"
@@ -407,6 +426,12 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
                     </button>
                   </div>
                 </div>
+
+                {audioSource ? (
+                  <div className="pill w-fit border-[rgba(var(--accent),0.24)] bg-[rgba(var(--accent),0.1)] text-[rgb(var(--accent))]">
+                    Источник озвучки: {AUDIO_SOURCE_LABELS[audioSource]}
+                  </div>
+                ) : null}
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="rounded-[28px] border border-white/10 bg-white/5 p-5">

@@ -54,6 +54,9 @@ assets/qwen-tts/*
 !assets/qwen-tts/.gitkeep
 public/audio/cards/*
 !public/audio/cards/.gitkeep
+data/*.db
+data/*.sqlite
+!data/.gitkeep
 
 # OS files
 .DS_Store

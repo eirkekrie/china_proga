@@ -2,8 +2,15 @@ import type { AudioManifest, AudioManifestEntry, Card } from "@/lib/types";
 import { buildCardKey } from "@/lib/utils";
 
 export interface PronunciationEngine {
-  play(card: Card): Promise<boolean>;
+  play(card: Card): Promise<PronunciationPlaybackResult>;
 }
+
+export type PronunciationPlaybackSource = "wav" | "qwen" | "browser";
+
+export type PronunciationPlaybackResult = {
+  played: boolean;
+  source: PronunciationPlaybackSource | null;
+};
 
 const PREFERRED_LANGS = ["zh-CN", "zh-Hans", "zh-HK", "zh-TW", "zh"];
 const AUDIO_MANIFEST_URL = "/audio/cards/manifest.json";
@@ -242,18 +249,28 @@ class HybridPronunciationEngine implements PronunciationEngine {
     }
   }
 
-  async play(card: Card) {
+  async play(card: Card): Promise<PronunciationPlaybackResult> {
     const preGeneratedPlayed = await this.playPreGenerated(card);
     if (preGeneratedPlayed) {
-      return true;
+      return {
+        played: true,
+        source: "wav",
+      };
     }
 
     const remotePlayed = await this.playRemote(card);
     if (remotePlayed) {
-      return true;
+      return {
+        played: true,
+        source: "qwen",
+      };
     }
 
-    return this.playBrowser(card);
+    const browserPlayed = await this.playBrowser(card);
+    return {
+      played: browserPlayed,
+      source: browserPlayed ? "browser" : null,
+    };
   }
 }
 

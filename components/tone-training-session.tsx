@@ -7,6 +7,12 @@ import { buildToneExercises } from "@/lib/tone-training";
 import { formatDuration } from "@/lib/utils";
 import type { ToneExercise, ToneTrainingMode } from "@/lib/types";
 
+const AUDIO_SOURCE_LABELS = {
+  wav: "wav",
+  qwen: "qwen",
+  browser: "browser",
+} as const;
+
 const toneModes: Array<{ id: ToneTrainingMode; label: string; description: string }> = [
   {
     id: "tone_number",
@@ -48,6 +54,7 @@ export function ToneTrainingSession() {
   const [selectedValue, setSelectedValue] = useState<string | null>(null);
   const [result, setResult] = useState<{ isCorrect: boolean; expected: string } | null>(null);
   const [audioNotice, setAudioNotice] = useState<string | null>(null);
+  const [audioSource, setAudioSource] = useState<keyof typeof AUDIO_SOURCE_LABELS | null>(null);
   const [sessionCompleted, setSessionCompleted] = useState(0);
   const [sessionCorrect, setSessionCorrect] = useState(0);
   const addStudyTimeRef = useRef(addStudyTime);
@@ -71,6 +78,7 @@ export function ToneTrainingSession() {
     setSelectedValue(null);
     setResult(null);
     setAudioNotice(null);
+    setAudioSource(null);
   }, [mode]);
 
   useEffect(() => {
@@ -89,6 +97,7 @@ export function ToneTrainingSession() {
     setSelectedValue(null);
     setResult(null);
     setAudioNotice(null);
+    setAudioSource(null);
   }, [currentExercise?.id]);
 
   useEffect(() => {
@@ -111,8 +120,10 @@ export function ToneTrainingSession() {
     }
 
     setAudioNotice(null);
-    const played = await pronunciationEngine.play(currentCard);
-    if (!played) {
+    const playback = await pronunciationEngine.play(currentCard);
+    setAudioSource(playback.source);
+
+    if (!playback.played) {
       setAudioNotice(
         "Не удалось воспроизвести аудио. Проверьте готовые файлы, локальный Qwen TTS или системный китайский голос браузера.",
       );
@@ -262,6 +273,11 @@ export function ToneTrainingSession() {
             </div>
 
             {audioNotice && !result ? <p className="text-sm text-[rgb(var(--accent))]">{audioNotice}</p> : null}
+            {audioSource && !result ? (
+              <div className="pill w-fit border-[rgba(var(--accent),0.24)] bg-[rgba(var(--accent),0.1)] text-[rgb(var(--accent))]">
+                Источник озвучки: {AUDIO_SOURCE_LABELS[audioSource]}
+              </div>
+            ) : null}
 
             {result ? (
               <div
@@ -286,6 +302,11 @@ export function ToneTrainingSession() {
                   ))}
                 </div>
                 {audioNotice ? <p className="mt-3 text-sm text-[rgb(var(--accent))]">{audioNotice}</p> : null}
+                {audioSource ? (
+                  <div className="pill mt-3 w-fit border-[rgba(var(--accent),0.24)] bg-[rgba(var(--accent),0.1)] text-[rgb(var(--accent))]">
+                    Источник озвучки: {AUDIO_SOURCE_LABELS[audioSource]}
+                  </div>
+                ) : null}
                 <button type="button" className="btn-primary mt-4" onClick={handleNext}>
                   Следующее упражнение
                 </button>

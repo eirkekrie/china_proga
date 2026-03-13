@@ -21,6 +21,12 @@ type HintFlags = {
   audio: boolean;
 };
 
+const AUDIO_SOURCE_LABELS = {
+  wav: "wav",
+  qwen: "qwen",
+  browser: "browser",
+} as const;
+
 function buildOptions(cards: Card[], currentCard: DerivedCard, mode: LearningStage) {
   const distractors = shuffleArray(cards.filter((card) => card.id !== currentCard.id)).slice(0, 3);
   const toOption = (card: Card): TestOption => {
@@ -54,6 +60,7 @@ export function TestSession() {
   const [hintFlags, setHintFlags] = useState<HintFlags>({ pinyin: false, audio: false });
   const [result, setResult] = useState<{ isCorrect: boolean; expected: string; grade: ReviewGrade } | null>(null);
   const [audioNotice, setAudioNotice] = useState<string | null>(null);
+  const [audioSource, setAudioSource] = useState<keyof typeof AUDIO_SOURCE_LABELS | null>(null);
   const [pronunciationAssessment, setPronunciationAssessment] = useState<PronunciationAssessment | null>(null);
   const [handwritingState, setHandwritingState] = useState<HandwritingAnswerState | null>(null);
   const startedAtRef = useRef(0);
@@ -73,6 +80,7 @@ export function TestSession() {
     setHintFlags({ pinyin: false, audio: false });
     setResult(null);
     setAudioNotice(null);
+    setAudioSource(null);
     setPronunciationAssessment(null);
     setHandwritingState(null);
 
@@ -105,6 +113,7 @@ export function TestSession() {
     setHintFlags({ pinyin: false, audio: false });
     setResult(null);
     setAudioNotice(null);
+    setAudioSource(null);
     setPronunciationAssessment(null);
     setHandwritingState(null);
   }, [currentCard?.id]);
@@ -166,8 +175,10 @@ export function TestSession() {
     }
 
     setAudioNotice(null);
-    const played = await pronunciationEngine.play(currentCard);
-    if (played) {
+    const playback = await pronunciationEngine.play(currentCard);
+    setAudioSource(playback.source);
+
+    if (playback.played) {
       markHintUsed("audio");
       return;
     }
@@ -411,6 +422,11 @@ export function TestSession() {
             )}
 
             {audioNotice && !result ? <p className="text-sm text-[rgb(var(--accent))]">{audioNotice}</p> : null}
+            {audioSource && !result ? (
+              <div className="pill w-fit border-[rgba(var(--accent),0.24)] bg-[rgba(var(--accent),0.1)] text-[rgb(var(--accent))]">
+                Источник озвучки: {AUDIO_SOURCE_LABELS[audioSource]}
+              </div>
+            ) : null}
             {hintUsed && !result ? (
               <p className="text-sm text-[rgb(var(--warning))]">
                 Подсказки использованы. Верный ответ будет засчитан максимум как «Трудно».
@@ -449,6 +465,11 @@ export function TestSession() {
                   </p>
                 ) : null}
                 {audioNotice ? <p className="mt-2 text-sm text-[rgb(var(--accent))]">{audioNotice}</p> : null}
+                {audioSource ? (
+                  <div className="pill mt-3 w-fit border-[rgba(var(--accent),0.24)] bg-[rgba(var(--accent),0.1)] text-[rgb(var(--accent))]">
+                    Источник озвучки: {AUDIO_SOURCE_LABELS[audioSource]}
+                  </div>
+                ) : null}
                 <button type="button" className="btn-primary mt-4" onClick={handleNext}>
                   Следующая карточка
                 </button>

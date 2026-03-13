@@ -8,7 +8,7 @@ export type PersistedAppState = {
   theme: ThemeMode;
 };
 
-function createDefaultStats(): StudyStats {
+export function createDefaultStats(): StudyStats {
   return {
     totalStudyTime: 0,
     todayStudyTime: 0,
@@ -22,7 +22,7 @@ function createDefaultStats(): StudyStats {
   };
 }
 
-function sanitizeCard(raw: Partial<Card>): Card {
+export function sanitizeCard(raw: Partial<Card>): Card {
   return {
     id: raw.id ?? `card-${Date.now().toString(36)}`,
     hanzi: raw.hanzi ?? "",
@@ -52,7 +52,7 @@ function sanitizeCard(raw: Partial<Card>): Card {
   };
 }
 
-function sanitizeStats(raw: Partial<StudyStats> | undefined): StudyStats {
+export function sanitizeStats(raw: Partial<StudyStats> | undefined): StudyStats {
   return {
     ...createDefaultStats(),
     ...raw,
@@ -71,6 +71,18 @@ export function createSeedState(): PersistedAppState {
   };
 }
 
+export function normalizePersistedState(raw: Partial<PersistedAppState> | undefined): PersistedAppState {
+  const fallback = createSeedState();
+  const cards =
+    Array.isArray(raw?.cards) && raw.cards.length > 0 ? raw.cards.map(sanitizeCard) : fallback.cards;
+
+  return {
+    cards,
+    stats: sanitizeStats(raw?.stats),
+    theme: raw?.theme === "light" ? "light" : "dark",
+  };
+}
+
 export function loadPersistedState(): PersistedAppState {
   if (typeof window === "undefined") {
     return createSeedState();
@@ -83,17 +95,7 @@ export function loadPersistedState(): PersistedAppState {
     }
 
     const parsed = JSON.parse(raw) as Partial<PersistedAppState>;
-    const fallback = createSeedState();
-    const cards =
-      Array.isArray(parsed.cards) && parsed.cards.length > 0
-        ? parsed.cards.map(sanitizeCard)
-        : fallback.cards;
-
-    return {
-      cards,
-      stats: sanitizeStats(parsed.stats),
-      theme: parsed.theme === "light" ? "light" : "dark",
-    };
+    return normalizePersistedState(parsed);
   } catch {
     return createSeedState();
   }

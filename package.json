@@ -4,9 +4,12 @@
   "version": "0.1.0",
   "scripts": {
     "dev": "next dev",
+    "dev:full": "node scripts/run-local-stack.mjs --with-web",
     "build": "next build",
     "start": "next start",
     "generate:audio": "python scripts/generate_card_audio.py",
+    "qwen:server": "python scripts/qwen_tts_server.py",
+    "services": "node scripts/run-local-stack.mjs",
     "pronunciation:server": "python scripts/pronunciation_server.py"
   },
   "dependencies": {
