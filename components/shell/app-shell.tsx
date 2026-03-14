@@ -19,7 +19,11 @@ const navItems = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { metrics, stats } = useStudy();
+  const { hydrated, metrics, stats } = useStudy();
+
+  const dueTodayLabel = hydrated ? String(metrics.dueTodayCount) : "…";
+  const progressLabel = hydrated ? `${metrics.progressPercent}%` : "…";
+  const sessionLabel = hydrated ? formatDuration(stats.sessionStudyTime) : "…";
 
   return (
     <div className="min-h-screen">
@@ -41,15 +45,15 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="flex flex-wrap items-center gap-2">
               <span className="pill">
                 Повторить сегодня
-                <strong>{metrics.dueTodayCount}</strong>
+                <strong>{dueTodayLabel}</strong>
               </span>
               <span className="pill">
                 Прогресс
-                <strong>{metrics.progressPercent}%</strong>
+                <strong>{progressLabel}</strong>
               </span>
               <span className="pill">
                 Сессия
-                <strong>{formatDuration(stats.sessionStudyTime)}</strong>
+                <strong>{sessionLabel}</strong>
               </span>
               <ThemeToggle />
             </div>

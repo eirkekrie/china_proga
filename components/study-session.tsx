@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
@@ -7,7 +7,15 @@ import { HanziWritingPractice } from "@/components/hanzi-writing-practice";
 import { PronunciationChecker } from "@/components/pronunciation-checker";
 import { useStudy } from "@/context/study-context";
 import { pronunciationEngine } from "@/lib/audio";
-import { REVIEW_GRADE_LABELS, STAGE_HINTS, STAGE_LABELS, STAGE_PROMPTS } from "@/lib/constants";
+import {
+  LEARN_ROTATION_WINDOW,
+  REVIEW_GRADE_LABELS,
+  REVIEW_ROTATION_WINDOW,
+  STAGE_HINTS,
+  STAGE_LABELS,
+  STAGE_PROMPTS,
+} from "@/lib/constants";
+import { pickCardFromQueue } from "@/lib/learning";
 import { formatDuration, formatRelativeDue } from "@/lib/utils";
 import type { DerivedCard, PronunciationAssessment, ReviewGrade, StudyFlow } from "@/lib/types";
 
@@ -24,8 +32,6 @@ type HintFlags = {
 
 const AUDIO_SOURCE_LABELS = {
   wav: "wav",
-  qwen: "qwen",
-  browser: "browser",
 } as const;
 
 const buttonStyles: Record<ReviewGrade, string> = {
@@ -71,12 +77,14 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
   const { addStudyTime, answerCard, getQueue, hydrated, metrics, stats } = useStudy();
   const queue = getQueue(flow);
   const recentWindowSize = flow === "review" ? 4 : 6;
+  const rotationWindowSize = flow === "review" ? REVIEW_ROTATION_WINDOW : LEARN_ROTATION_WINDOW;
 
   const [currentCardId, setCurrentCardId] = useState<string | null>(null);
   const [revealed, setRevealed] = useState(false);
   const [showPinyinHint, setShowPinyinHint] = useState(false);
   const [flashGrade, setFlashGrade] = useState<ReviewGrade | null>(null);
   const [cooldownIds, setCooldownIds] = useState<string[]>([]);
+  const [rotationIndex, setRotationIndex] = useState(0);
   const [audioNotice, setAudioNotice] = useState<string | null>(null);
   const [audioSource, setAudioSource] = useState<keyof typeof AUDIO_SOURCE_LABELS | null>(null);
   const [pronunciationAssessment, setPronunciationAssessment] = useState<PronunciationAssessment | null>(null);
@@ -87,9 +95,7 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
 
   const currentCard =
     queue.find((card) => card.id === currentCardId) ??
-    queue.find((card) => !cooldownIds.includes(card.id)) ??
-    queue[0] ??
-    null;
+    pickCardFromQueue(queue, cooldownIds, rotationIndex, rotationWindowSize);
 
   useEffect(() => {
     if (!currentCardId && currentCard) {
@@ -98,10 +104,10 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
     }
 
     if (currentCardId && !queue.some((card) => card.id === currentCardId)) {
-      const nextCard = queue.find((card) => !cooldownIds.includes(card.id)) ?? queue[0] ?? null;
+      const nextCard = pickCardFromQueue(queue, cooldownIds, rotationIndex, rotationWindowSize);
       setCurrentCardId(nextCard?.id ?? null);
     }
-  }, [cooldownIds, currentCard, currentCardId, queue]);
+  }, [cooldownIds, currentCard, currentCardId, queue, rotationIndex, rotationWindowSize]);
 
   useEffect(() => {
     if (!currentCard) {
@@ -171,7 +177,7 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
     }
 
     setAudioNotice(
-      "Не удалось запустить ни готовое аудио, ни локальный Qwen3-TTS, ни системный голос браузера.",
+      "Для этой карточки не найден предзаписанный wav-файл. Сгенерируйте аудио через scripts/generate_card_audio.py.",
     );
   }
 
@@ -185,6 +191,7 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
 
     answerCard(currentCard.id, effectiveGrade, responseTimeMs);
     setFlashGrade(effectiveGrade);
+    setRotationIndex((previous) => previous + 1);
     setCooldownIds((previous) =>
       [...previous.filter((id) => id !== currentCard.id), currentCard.id].slice(-recentWindowSize),
     );
@@ -409,7 +416,7 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
                     <p className="text-xs uppercase tracking-[0.18em] subtle-text">Правильный ответ</p>
                     <p className="mt-3 text-3xl font-semibold tracking-[-0.04em]">{prompt.answer}</p>
                     <p className="mt-2 text-xs uppercase tracking-[0.16em] subtle-text">
-                      Готовый аудиофайл, локальный Qwen3-TTS или системный голос
+                      Предзаписанный wav-файл
                     </p>
                   </div>
 
@@ -446,9 +453,7 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
 
                 <HanziWritingPractice text={currentCard.hanzi} />
 
-                {isPronunciationStage ? (
-                  <PronunciationChecker card={currentCard} onAssessmentChange={setPronunciationAssessment} compact />
-                ) : null}
+                <PronunciationChecker card={currentCard} onAssessmentChange={setPronunciationAssessment} compact />
 
                 <div className="grid gap-4 rounded-[28px] border border-white/10 bg-white/5 p-5">
                   <div className="flex items-center justify-between gap-4">
@@ -462,10 +467,17 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
                     </p>
                   ) : null}
                   {pronunciationAssessment ? (
-                    <p className="text-sm muted-text">
-                      SenseVoice рекомендует: <strong>{REVIEW_GRADE_LABELS[pronunciationAssessment.grade]}</strong> · score{" "}
-                      {pronunciationAssessment.overallScore}%.
-                    </p>
+                    isPronunciationStage ? (
+                      <p className="text-sm muted-text">
+                        SenseVoice рекомендует: <strong>{REVIEW_GRADE_LABELS[pronunciationAssessment.grade]}</strong> ·
+                        score {pronunciationAssessment.overallScore}%.
+                      </p>
+                    ) : (
+                      <p className="text-sm muted-text">
+                        Дополнительная проверка произношения: <strong>{pronunciationAssessment.overallScore}%</strong>.
+                        До `Stage 4` этот блок не меняет оценку карточки и нужен только для практики.
+                      </p>
+                    )
                   ) : null}
                   {currentCard.overdueLevel === "critical" ? (
                     <p className="text-sm text-[rgb(var(--danger))]">
@@ -483,7 +495,7 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
                   ))}
                 </div>
 
-                {pronunciationAssessment ? (
+                {isPronunciationStage && pronunciationAssessment ? (
                   <button
                     type="button"
                     className="btn-ghost w-full"
@@ -542,3 +554,4 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
     </div>
   );
 }
+

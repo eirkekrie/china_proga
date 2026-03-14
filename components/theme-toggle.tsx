@@ -3,7 +3,15 @@
 import { useStudy } from "@/context/study-context";
 
 export function ThemeToggle() {
-  const { theme, setTheme } = useStudy();
+  const { hydrated, theme, setTheme } = useStudy();
+
+  if (!hydrated) {
+    return (
+      <button type="button" className="btn-secondary px-4 py-2 text-sm" disabled>
+        Тема
+      </button>
+    );
+  }
 
   return (
     <button

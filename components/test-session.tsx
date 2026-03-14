@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useRef, useState } from "react";
 import { HanziHandwritingAnswer, type HandwritingAnswerState } from "@/components/hanzi-handwriting-answer";
@@ -23,8 +23,6 @@ type HintFlags = {
 
 const AUDIO_SOURCE_LABELS = {
   wav: "wav",
-  qwen: "qwen",
-  browser: "browser",
 } as const;
 
 function buildOptions(cards: Card[], currentCard: DerivedCard, mode: LearningStage) {
@@ -184,7 +182,7 @@ export function TestSession() {
     }
 
     setAudioNotice(
-      "Не удалось запустить ни готовое аудио, ни локальный Qwen3-TTS, ни системный голос браузера.",
+      "Для этой карточки не найден предзаписанный wav-файл. Сгенерируйте аудио через scripts/generate_card_audio.py.",
     );
   }
 
@@ -543,3 +541,4 @@ export function TestSession() {
     </div>
   );
 }
+

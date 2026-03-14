@@ -53,6 +53,8 @@ export const STAGE_BASE_INTERVAL_DAYS: Record<LearningStage, number> = {
 
 export const MAX_ACTIVE_LEARNING_CARDS = 3;
 export const MAX_NEW_CARDS_IN_LEARN_QUEUE = 1;
+export const LEARN_ROTATION_WINDOW = 5;
+export const REVIEW_ROTATION_WINDOW = 4;
 
 export const STATUS_LABELS: Record<CardStatus, string> = {
   new: "Новая",

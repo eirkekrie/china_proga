@@ -112,6 +112,24 @@ function compareByUrgency(left: DerivedCard, right: DerivedCard) {
   return rightScore - leftScore;
 }
 
+export function pickCardFromQueue(
+  queue: DerivedCard[],
+  recentIds: string[],
+  rotationIndex: number,
+  windowSize: number,
+) {
+  if (queue.length === 0) {
+    return null;
+  }
+
+  const eligibleCards = queue.filter((card) => !recentIds.includes(card.id));
+  const sourceCards = eligibleCards.length > 0 ? eligibleCards : queue;
+  const poolSize = clamp(windowSize, 1, sourceCards.length);
+  const rotationPool = sourceCards.slice(0, poolSize);
+
+  return rotationPool[rotationIndex % rotationPool.length] ?? sourceCards[0] ?? null;
+}
+
 export function buildStudyQueue(
   cards: Card[],
   flow: StudyFlow,

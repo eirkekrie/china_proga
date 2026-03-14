@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useRef, useState } from "react";
 import { pronunciationEngine } from "@/lib/audio";
@@ -9,8 +9,6 @@ import type { ToneExercise, ToneTrainingMode } from "@/lib/types";
 
 const AUDIO_SOURCE_LABELS = {
   wav: "wav",
-  qwen: "qwen",
-  browser: "browser",
 } as const;
 
 const toneModes: Array<{ id: ToneTrainingMode; label: string; description: string }> = [
@@ -125,7 +123,7 @@ export function ToneTrainingSession() {
 
     if (!playback.played) {
       setAudioNotice(
-        "Не удалось воспроизвести аудио. Проверьте готовые файлы, локальный Qwen TTS или системный китайский голос браузера.",
+        "Не удалось воспроизвести аудио. Для упражнения не найден предзаписанный wav-файл.",
       );
     }
   }
@@ -362,3 +360,4 @@ export function ToneTrainingSession() {
     </div>
   );
 }
+
