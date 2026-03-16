@@ -1,8 +1,7 @@
-export const learningStages = [
+﻿export const learningStages = [
   "hanzi_to_translation",
   "translation_to_hanzi",
   "hanzi_to_pinyin",
-  "hanzi_to_pronunciation",
 ] as const;
 
 export type LearningStage = (typeof learningStages)[number];
@@ -15,7 +14,21 @@ export type StageProgress = {
   hanzi_to_translation: number;
   translation_to_hanzi: number;
   hanzi_to_pinyin: number;
-  hanzi_to_pronunciation: number;
+};
+
+export type FsrsStateLabel = "New" | "Learning" | "Review" | "Relearning";
+
+export type FsrsCardSnapshot = {
+  due: string;
+  stability: number;
+  difficulty: number;
+  elapsed_days: number;
+  scheduled_days: number;
+  learning_steps: number;
+  reps: number;
+  lapses: number;
+  state: FsrsStateLabel;
+  last_review: string | null;
 };
 
 export type Card = {
@@ -37,6 +50,7 @@ export type Card = {
   lastSeenAt: string | null;
   lastCorrectAt: string | null;
   nextReviewAt: string | null;
+  fsrs: FsrsCardSnapshot;
   totalTimeSpent: number;
   averageResponseTime: number;
 };
@@ -98,7 +112,7 @@ export type AudioManifestEntry = {
   engine: string;
   modelId: string;
   mode: string;
-  speaker: string | null;
+  speaker: string;
 };
 
 export type AudioManifest = {
@@ -107,7 +121,7 @@ export type AudioManifest = {
   engine: string;
   modelId: string;
   mode: string;
-  speaker: string | null;
+  speaker: string;
   sourceFile?: string;
   entries: Record<string, AudioManifestEntry>;
   stats?: {
@@ -117,23 +131,6 @@ export type AudioManifest = {
     duplicates: number;
     invalidLines: number;
   };
-};
-
-export type PronunciationAssessment = {
-  transcript: string;
-  normalizedTranscript: string;
-  recognizedPinyin: string;
-  expectedHanzi: string;
-  expectedPinyin: string;
-  transcriptScore: number;
-  pinyinScore: number;
-  toneScore: number;
-  overallScore: number;
-  grade: ReviewGrade;
-  feedback: string;
-  engine: string;
-  language: string;
-  durationMs: number;
 };
 
 export type ToneTrainingMode = "tone_number" | "similar_syllable";

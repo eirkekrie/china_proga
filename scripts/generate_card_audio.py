@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
 import hashlib
@@ -12,7 +12,7 @@ from pathlib import Path
 from qwen_tts_runtime import REPO_ROOT, QwenTTSRuntime
 
 
-PUNCTUATION_PATTERN = re.compile(r"""[.,!?;:()\[\]{}"'`]""")
+PUNCTUATION_PATTERN = re.compile(r"""[.,!?;:()\[\]{}\"'`]""")
 WHITESPACE_PATTERN = re.compile(r"\s+")
 BREAK_PATTERN = re.compile(r"<br\s*/?>", re.IGNORECASE)
 ASCII_SLUG_PATTERN = re.compile(r"[^a-z0-9]+")
@@ -86,6 +86,20 @@ def build_filename(index: int, card: ParsedCard) -> str:
     return f"{index + 1:04d}-{pinyin_slug[:32]}-{suffix}.wav"
 
 
+def build_generation_instruct(card: ParsedCard) -> str:
+    return (
+        "Please read the Chinese text in standard Mandarin. "
+        "Speak only the Chinese text itself and do not read any explanation or pinyin aloud. "
+        f"Reading hint: {card.pinyin}."
+    )
+
+
+def build_generation_text(card: ParsedCard) -> str:
+    if card.hanzi.endswith(("\u3002", "\uff01", "\uff1f", ".", "!", "?")):
+        return card.hanzi
+    return f"{card.hanzi}\u3002"
+
+
 def load_existing_manifest(path: Path) -> dict:
     if not path.exists():
         return {"version": 1, "entries": {}}
@@ -103,7 +117,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--input",
         required=True,
-        help="Path to a UTF-8 text file with lines like 人;rén<br>Человек",
+        help="Path to a UTF-8 text file with lines like дєє;rГ©n<br>Р§РµР»РѕРІРµРє",
     )
     parser.add_argument(
         "--output-dir",
@@ -178,7 +192,10 @@ def main() -> None:
         if output_path.exists() and not args.force:
             reused_count += 1
         else:
-            audio_bytes = runtime.synthesize_wav_bytes(card.hanzi)
+            audio_bytes = runtime.synthesize_wav_bytes(
+                build_generation_text(card),
+                instruct=build_generation_instruct(card),
+            )
             output_path.write_bytes(audio_bytes)
             generated_count += 1
 
@@ -221,6 +238,7 @@ def main() -> None:
     if invalid_lines:
         print(f"Invalid lines skipped: {len(invalid_lines)}", flush=True)
     print(f"Manifest written to: {manifest_path}", flush=True)
+
 
 if __name__ == "__main__":
     main()

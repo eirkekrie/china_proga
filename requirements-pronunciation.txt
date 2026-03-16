@@ -1,4 +1,0 @@
-funasr
-modelscope
-pypinyin
-soundfile

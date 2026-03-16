@@ -1,3 +1,4 @@
+﻿import { createInitialFsrsSnapshot } from "@/lib/fsrs";
 import { learningStages, type Card, type ParseResult, type StageProgress } from "@/lib/types";
 import { buildCardKey } from "@/lib/utils";
 
@@ -6,7 +7,6 @@ function createEmptyStageProgress(): StageProgress {
     hanzi_to_translation: 0,
     translation_to_hanzi: 0,
     hanzi_to_pinyin: 0,
-    hanzi_to_pronunciation: 0,
   };
 }
 
@@ -47,12 +47,13 @@ function createCard(
     streakCorrect: 0,
     easeFactor: 2.3,
     interval: 0,
-    memoryStrength: 28,
+    memoryStrength: 8,
     forgettingScore: 12,
     createdAt: now.toISOString(),
     lastSeenAt: null,
     lastCorrectAt: null,
     nextReviewAt: null,
+    fsrs: createInitialFsrsSnapshot(now),
     totalTimeSpent: 0,
     averageResponseTime: 0,
   };

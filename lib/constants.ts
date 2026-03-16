@@ -1,54 +1,47 @@
-import type { CardStatus, LearningStage, ReviewGrade } from "@/lib/types";
+﻿import type { CardStatus, LearningStage, ReviewGrade } from "@/lib/types";
 
 export const STORAGE_KEY = "hanzi-study-state-v1";
 
 export const STAGE_LABELS: Record<LearningStage, string> = {
   hanzi_to_translation: "Stage 1 · Иероглиф → перевод",
   translation_to_hanzi: "Stage 2 · Перевод → иероглиф",
-  hanzi_to_pinyin: "Stage 3 · Иероглиф → пиньинь",
-  hanzi_to_pronunciation: "Stage 4 · Иероглиф → произношение",
+  hanzi_to_pinyin: "Практика · Иероглиф → пиньинь",
 };
 
 export const STAGE_SHORT_LABELS: Record<LearningStage, string> = {
   hanzi_to_translation: "Перевод",
   translation_to_hanzi: "Иероглиф",
   hanzi_to_pinyin: "Пиньинь",
-  hanzi_to_pronunciation: "Произношение",
 };
 
 export const STAGE_PROMPTS: Record<LearningStage, string> = {
   hanzi_to_translation: "Вспомните перевод",
   translation_to_hanzi: "Вспомните иероглиф",
   hanzi_to_pinyin: "Вспомните пиньинь",
-  hanzi_to_pronunciation: "Вспомните произношение",
 };
 
 export const STAGE_HINTS: Record<LearningStage, string> = {
   hanzi_to_translation: "Сначала закрепляем смысл. Карточка должна уверенно узнавать перевод.",
   translation_to_hanzi: "После смысла идёт активное вспоминание иероглифа по русскому переводу.",
-  hanzi_to_pinyin: "Когда значение держится уверенно, подключаем чтение и тон.",
-  hanzi_to_pronunciation: "Финальный этап: произношение, сверка с пиньинем и будущим аудио.",
+  hanzi_to_pinyin: "Пиньинь вынесен в отдельную практику и тесты, чтобы не перегружать основной цикл.",
 };
 
 export const STAGE_SUCCESS_THRESHOLD: Record<LearningStage, number> = {
   hanzi_to_translation: 100,
   translation_to_hanzi: 100,
   hanzi_to_pinyin: 100,
-  hanzi_to_pronunciation: 100,
 };
 
 export const STAGE_REQUIRED_STREAK: Record<LearningStage, number> = {
   hanzi_to_translation: 3,
   translation_to_hanzi: 3,
   hanzi_to_pinyin: 4,
-  hanzi_to_pronunciation: 4,
 };
 
 export const STAGE_BASE_INTERVAL_DAYS: Record<LearningStage, number> = {
   hanzi_to_translation: 0.75,
   translation_to_hanzi: 1.2,
   hanzi_to_pinyin: 1.8,
-  hanzi_to_pronunciation: 2.4,
 };
 
 export const MAX_ACTIVE_LEARNING_CARDS = 3;

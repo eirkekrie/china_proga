@@ -11,23 +11,6 @@ npm run dev
 
 После запуска откройте `http://localhost:3000`.
 
-Теперь `npm run dev` запускает сразу:
-
-- Next.js приложение
-- локальный `pronunciation server`
-
-Если нужен только веб-интерфейс без сервера распознавания, используйте:
-
-```bash
-npm run dev:web
-```
-
-Если `python` в системе называется иначе, можно указать интерпретатор явно:
-
-```bash
-PYTHON_EXECUTABLE=python npm run dev
-```
-
 ## SQLite
 
 Приложение хранит состояние в SQLite через route `app/api/state/route.ts`.
@@ -49,7 +32,7 @@ PYTHON_EXECUTABLE=python npm run dev
 
 Манифест связывает карточку с аудио по стабильному ключу из `hanzi + pinyin + translation`.
 
-Если для карточки нет готового `wav`, приложение покажет сообщение, что аудио не найдено. Live TTS и браузерный синтез речи больше не используются.
+Если для карточки нет готового `wav`, приложение покажет сообщение, что аудио не найдено.
 
 ## Генерация wav-файлов
 
@@ -97,43 +80,11 @@ pip install -r requirements-qwen-tts.txt
 - `QWEN_TTS_REF_AUDIO`
 - `QWEN_TTS_REF_TEXT`
 
-## Распознавание произношения
-
-Для проверки произношения приложение записывает голос с микрофона и отправляет его в локальный open-source сервис.
-
-Текущий стек:
-
-- `FunAudioLLM/SenseVoiceSmall` через `FunASR`
-- локальный сервер `scripts/pronunciation_server.py`
-- Next route `app/api/pronunciation/route.ts`
-
-### Настройка pronunciation server
-
-1. Скопируйте переменные из `.env.example` в `.env.local`
-2. Установите зависимости:
-
-```bash
-pip install -r requirements-pronunciation.txt
-```
-
-3. Обычно отдельно запускать локальный сервис не нужно: его поднимает `npm run dev`.
-
-Если хотите поднять только сервис распознавания отдельно:
-
-```bash
-python scripts/pronunciation_server.py
-```
-
-или:
-
-```bash
-npm run pronunciation:server
-```
-
 ## Что внутри
 
-- Поэтапное обучение: `иероглиф → перевод → иероглиф → пиньинь → произношение`
-- Forgetting curve на основе `memoryStrength`, `forgettingScore`, `lastSeenAt`, `nextReviewAt`
+- Поэтапное обучение: `иероглиф → перевод → иероглиф`
+- Отдельная практика и тесты на пиньинь
+- FSRS-планировщик повторений
 - Статистика времени: общее, за сегодня, за сессию, среднее на карточку
 - Пропись на обратной стороне карточки через `hanzi-writer`
 - Опциональный рукописный ответ в тесте `перевод → иероглиф`
@@ -145,4 +96,4 @@ npm run pronunciation:server
 - `app/` — страницы и глобальные стили
 - `components/` — интерфейсные блоки
 - `context/` — клиентское хранилище приложения
-- `lib/` — типы, парсер, forgetting logic и утилиты
+- `lib/` — типы, парсер, FSRS-логика и утилиты

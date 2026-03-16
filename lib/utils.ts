@@ -1,4 +1,4 @@
-import type { Card, LearningStage } from "@/lib/types";
+﻿import type { Card, LearningStage } from "@/lib/types";
 
 const DAY_MS = 1000 * 60 * 60 * 24;
 
@@ -103,7 +103,7 @@ export function compareAnswer(mode: LearningStage, answer: string, card: Card) {
     return answer.trim() === card.hanzi.trim();
   }
 
-  if (mode === "hanzi_to_pinyin" || mode === "hanzi_to_pronunciation") {
+  if (mode === "hanzi_to_pinyin") {
     return normalizePinyin(answer) === normalizePinyin(card.pinyin);
   }
 

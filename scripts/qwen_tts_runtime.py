@@ -171,7 +171,12 @@ class QwenTTSRuntime:
 
             return self._model
 
-    def synthesize_wav_bytes(self, text: str, language: str | None = None) -> bytes:
+    def synthesize_wav_bytes(
+        self,
+        text: str,
+        language: str | None = None,
+        instruct: str | None = None,
+    ) -> bytes:
         try:
             import soundfile as sf
         except ImportError as exc:
@@ -190,8 +195,13 @@ class QwenTTSRuntime:
                 "language": language_value,
                 "speaker": self.get_selected_speaker(),
             }
-            if self.settings.instruct:
-                generation_kwargs["instruct"] = self.settings.instruct
+            effective_instruct = " ".join(
+                part.strip()
+                for part in [self.settings.instruct, instruct or ""]
+                if part and part.strip()
+            ).strip()
+            if effective_instruct:
+                generation_kwargs["instruct"] = effective_instruct
             wavs, sample_rate = model.generate_custom_voice(**generation_kwargs)
         else:
             if self.settings.ref_audio is None or not self.settings.ref_text:

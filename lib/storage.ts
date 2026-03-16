@@ -1,3 +1,11 @@
+﻿import {
+  createInitialFsrsSnapshot,
+  deriveFsrsEaseFactor,
+  deriveFsrsForgettingScore,
+  deriveFsrsInterval,
+  deriveFsrsMemoryStrength,
+  ensureFsrsSnapshot,
+} from "@/lib/fsrs";
 import { STARTER_CARD_LINES, STORAGE_KEY } from "@/lib/constants";
 import { parseCardLines } from "@/lib/parser";
 import type { Card, StudyStats, ThemeMode } from "@/lib/types";
@@ -22,31 +30,63 @@ export function createDefaultStats(): StudyStats {
   };
 }
 
-export function sanitizeCard(raw: Partial<Card>): Card {
+export function sanitizeCard(raw: Partial<Card> & { currentStage?: string }): Card {
+  const now = new Date();
+  const rawStage = typeof raw.currentStage === "string" ? (raw.currentStage as string) : "";
+  const stageProgress = {
+    hanzi_to_translation: raw.stageProgress?.hanzi_to_translation ?? 0,
+    translation_to_hanzi: raw.stageProgress?.translation_to_hanzi ?? 0,
+    hanzi_to_pinyin: raw.stageProgress?.hanzi_to_pinyin ?? 0,
+  };
+
+  const isLegacyRemovedStage = rawStage === "hanzi_to_pronunciation";
+  const currentStage =
+    rawStage === "translation_to_hanzi" || rawStage === "hanzi_to_pinyin"
+      ? rawStage
+      : "hanzi_to_translation";
+  const status = isLegacyRemovedStage && raw.status !== "new" ? "mastered" : raw.status ?? "new";
+
+  if (isLegacyRemovedStage) {
+    stageProgress.translation_to_hanzi = Math.max(stageProgress.translation_to_hanzi, 100);
+  }
+
+  const fsrs = ensureFsrsSnapshot(
+    {
+      ...raw,
+      currentStage,
+      status,
+      stageProgress,
+      nextReviewAt:
+        isLegacyRemovedStage && !raw.nextReviewAt
+          ? new Date(Date.now() + 1000 * 60 * 60 * 24 * 3).toISOString()
+          : raw.nextReviewAt ?? null,
+    },
+    now,
+  );
+
+  const nextReviewAt =
+    raw.nextReviewAt ?? (status === "new" && (raw.repetitions ?? 0) === 0 ? null : fsrs.due);
+
   return {
     id: raw.id ?? `card-${Date.now().toString(36)}`,
     hanzi: raw.hanzi ?? "",
     pinyin: raw.pinyin ?? "",
     translation: raw.translation ?? "",
-    status: raw.status ?? "new",
-    currentStage: raw.currentStage ?? "hanzi_to_translation",
-    stageProgress: {
-      hanzi_to_translation: raw.stageProgress?.hanzi_to_translation ?? 0,
-      translation_to_hanzi: raw.stageProgress?.translation_to_hanzi ?? 0,
-      hanzi_to_pinyin: raw.stageProgress?.hanzi_to_pinyin ?? 0,
-      hanzi_to_pronunciation: raw.stageProgress?.hanzi_to_pronunciation ?? 0,
-    },
-    repetitions: raw.repetitions ?? 0,
-    mistakes: raw.mistakes ?? 0,
+    status,
+    currentStage,
+    stageProgress,
+    repetitions: raw.repetitions ?? fsrs.reps ?? 0,
+    mistakes: raw.mistakes ?? fsrs.lapses ?? 0,
     streakCorrect: raw.streakCorrect ?? 0,
-    easeFactor: raw.easeFactor ?? 2.3,
-    interval: raw.interval ?? 0,
-    memoryStrength: raw.memoryStrength ?? 28,
-    forgettingScore: raw.forgettingScore ?? 12,
+    easeFactor: raw.easeFactor ?? deriveFsrsEaseFactor(fsrs, now),
+    interval: raw.interval ?? deriveFsrsInterval(fsrs, now),
+    memoryStrength: raw.memoryStrength ?? deriveFsrsMemoryStrength(fsrs, now),
+    forgettingScore: raw.forgettingScore ?? deriveFsrsForgettingScore(fsrs, now),
     createdAt: raw.createdAt ?? new Date().toISOString(),
     lastSeenAt: raw.lastSeenAt ?? null,
     lastCorrectAt: raw.lastCorrectAt ?? null,
-    nextReviewAt: raw.nextReviewAt ?? null,
+    nextReviewAt,
+    fsrs: raw.fsrs ? fsrs : status === "new" && (raw.repetitions ?? 0) === 0 ? createInitialFsrsSnapshot(now) : fsrs,
     totalTimeSpent: raw.totalTimeSpent ?? 0,
     averageResponseTime: raw.averageResponseTime ?? 0,
   };
@@ -74,7 +114,7 @@ export function createSeedState(): PersistedAppState {
 export function normalizePersistedState(raw: Partial<PersistedAppState> | undefined): PersistedAppState {
   const fallback = createSeedState();
   const cards =
-    Array.isArray(raw?.cards) && raw.cards.length > 0 ? raw.cards.map(sanitizeCard) : fallback.cards;
+    Array.isArray(raw?.cards) && raw.cards.length > 0 ? raw.cards.map((card) => sanitizeCard(card as Partial<Card> & { currentStage?: string })) : fallback.cards;
 
   return {
     cards,
@@ -116,3 +156,5 @@ export function savePersistedState(state: PersistedAppState) {
     }),
   );
 }
+
+

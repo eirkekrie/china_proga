@@ -3,18 +3,17 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
-    "dev": "node scripts/run-dev-stack.mjs",
-    "dev:web": "next dev",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "generate:audio": "python scripts/generate_card_audio.py",
-    "pronunciation:server": "python scripts/pronunciation_server.py"
+    "generate:audio": "python scripts/generate_card_audio.py"
   },
   "dependencies": {
     "hanzi-writer": "^3.7.3",
     "next": "15.2.1",
     "react": "19.0.0",
-    "react-dom": "19.0.0"
+    "react-dom": "19.0.0",
+    "ts-fsrs": "^5.2.3"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",

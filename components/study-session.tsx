@@ -4,9 +4,8 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { HanziHandwritingAnswer } from "@/components/hanzi-handwriting-answer";
 import { HanziWritingPractice } from "@/components/hanzi-writing-practice";
-import { PronunciationChecker } from "@/components/pronunciation-checker";
 import { useStudy } from "@/context/study-context";
-import { pronunciationEngine } from "@/lib/audio";
+import { cardAudioEngine } from "@/lib/audio";
 import {
   LEARN_ROTATION_WINDOW,
   REVIEW_GRADE_LABELS,
@@ -17,7 +16,7 @@ import {
 } from "@/lib/constants";
 import { pickCardFromQueue } from "@/lib/learning";
 import { formatDuration, formatRelativeDue } from "@/lib/utils";
-import type { DerivedCard, PronunciationAssessment, ReviewGrade, StudyFlow } from "@/lib/types";
+import type { DerivedCard, ReviewGrade, StudyFlow } from "@/lib/types";
 
 type StudySessionProps = {
   flow: Extract<StudyFlow, "learn" | "review">;
@@ -54,12 +53,6 @@ function getPrompt(card: DerivedCard) {
         question: STAGE_PROMPTS[card.currentStage],
         answer: card.pinyin,
       };
-    case "hanzi_to_pronunciation":
-      return {
-        lead: card.hanzi,
-        question: STAGE_PROMPTS[card.currentStage],
-        answer: card.pinyin,
-      };
     default:
       return {
         lead: card.hanzi,
@@ -87,7 +80,6 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
   const [rotationIndex, setRotationIndex] = useState(0);
   const [audioNotice, setAudioNotice] = useState<string | null>(null);
   const [audioSource, setAudioSource] = useState<keyof typeof AUDIO_SOURCE_LABELS | null>(null);
-  const [pronunciationAssessment, setPronunciationAssessment] = useState<PronunciationAssessment | null>(null);
   const [hintFlags, setHintFlags] = useState<HintFlags>({ pinyin: false, audio: false });
   const [showHandwritingPad, setShowHandwritingPad] = useState(false);
   const startedAtRef = useRef(0);
@@ -120,7 +112,6 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
     setFlashGrade(null);
     setAudioNotice(null);
     setAudioSource(null);
-    setPronunciationAssessment(null);
     setHintFlags({ pinyin: false, audio: false });
     setShowHandwritingPad(false);
   }, [currentCard?.id]);
@@ -157,7 +148,7 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
     markHintUsed("pinyin");
   }
 
-  async function handlePlayPronunciation(options?: { countsAsHint?: boolean }) {
+  async function handlePlayAudio(options?: { countsAsHint?: boolean }) {
     if (!currentCard) {
       return;
     }
@@ -165,7 +156,7 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
     const countsAsHint = options?.countsAsHint ?? true;
 
     setAudioNotice(null);
-    const playback = await pronunciationEngine.play(currentCard);
+    const playback = await cardAudioEngine.play(currentCard);
     setAudioSource(playback.source);
 
     if (playback.played && countsAsHint) {
@@ -233,7 +224,6 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
 
   const prompt = getPrompt(currentCard);
   const isHanziRecallStage = currentCard.currentStage === "translation_to_hanzi";
-  const isPronunciationStage = currentCard.currentStage === "hanzi_to_pronunciation";
   const hintUsed = hasHintUsed(hintFlags);
   const cardClass =
     flashGrade === "good"
@@ -318,9 +308,9 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
                     <button
                       type="button"
                       className="btn-ghost w-full justify-between px-5 py-4 text-left"
-                      onClick={() => void handlePlayPronunciation()}
+                      onClick={() => void handlePlayAudio()}
                     >
-                      Голосовая подсказка
+                      Прослушать
                     </button>
                   </div>
 
@@ -371,8 +361,8 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
                   ) : null}
 
                   <p className="max-w-xl text-sm muted-text">
-                    Карточка показывает текущий этап освоения. Сначала смысл, затем обратное вспоминание, чтение и
-                    произношение.
+                    Карточка показывает текущий этап освоения. Сначала смысл, затем обратное вспоминание. Пиньинь вынесен
+                    в отдельную практику и тесты.
                   </p>
                 </div>
 
@@ -400,24 +390,18 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
                       </div>
                     </div>
                   </div>
-
-                  <button type="button" className="hidden" onClick={() => setRevealed(true)}>
-                    Показать ответ
-                  </button>
                 </div>
               </div>
             </div>
 
             <div className="flip-face flip-back glass-panel p-6 sm:p-8">
-              <div className="flex h-full flex-col justify-between">
+              <div className="flex h-full flex-col justify-between gap-6">
                 <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
                   <div>
                     <span className="pill mb-4">{STAGE_LABELS[currentCard.currentStage]}</span>
                     <p className="text-xs uppercase tracking-[0.18em] subtle-text">Правильный ответ</p>
                     <p className="mt-3 text-3xl font-semibold tracking-[-0.04em]">{prompt.answer}</p>
-                    <p className="mt-2 text-xs uppercase tracking-[0.16em] subtle-text">
-                      Предзаписанный wav-файл
-                    </p>
+                    <p className="mt-2 text-xs uppercase tracking-[0.16em] subtle-text">Предзаписанный wav-файл</p>
                   </div>
 
                   <div className="flex h-fit flex-wrap gap-2">
@@ -427,7 +411,7 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
                     <button
                       type="button"
                       className="btn-secondary"
-                      onClick={() => void handlePlayPronunciation({ countsAsHint: false })}
+                      onClick={() => void handlePlayAudio({ countsAsHint: false })}
                     >
                       Прослушать
                     </button>
@@ -453,8 +437,6 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
 
                 <HanziWritingPractice text={currentCard.hanzi} />
 
-                <PronunciationChecker card={currentCard} onAssessmentChange={setPronunciationAssessment} compact />
-
                 <div className="grid gap-4 rounded-[28px] border border-white/10 bg-white/5 p-5">
                   <div className="flex items-center justify-between gap-4">
                     <p className="text-sm font-medium">Подсказка по текущему этапу</p>
@@ -465,19 +447,6 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
                     <p className="text-sm text-[rgb(var(--warning))]">
                       Использованы подсказки. Ответ будет засчитан максимум как «Трудно».
                     </p>
-                  ) : null}
-                  {pronunciationAssessment ? (
-                    isPronunciationStage ? (
-                      <p className="text-sm muted-text">
-                        SenseVoice рекомендует: <strong>{REVIEW_GRADE_LABELS[pronunciationAssessment.grade]}</strong> ·
-                        score {pronunciationAssessment.overallScore}%.
-                      </p>
-                    ) : (
-                      <p className="text-sm muted-text">
-                        Дополнительная проверка произношения: <strong>{pronunciationAssessment.overallScore}%</strong>.
-                        До `Stage 4` этот блок не меняет оценку карточки и нужен только для практики.
-                      </p>
-                    )
                   ) : null}
                   {currentCard.overdueLevel === "critical" ? (
                     <p className="text-sm text-[rgb(var(--danger))]">
@@ -494,16 +463,6 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
                     </button>
                   ))}
                 </div>
-
-                {isPronunciationStage && pronunciationAssessment ? (
-                  <button
-                    type="button"
-                    className="btn-ghost w-full"
-                    onClick={() => handleGrade(pronunciationAssessment.grade)}
-                  >
-                    Использовать оценку SenseVoice: {REVIEW_GRADE_LABELS[pronunciationAssessment.grade]}
-                  </button>
-                ) : null}
               </div>
             </div>
           </div>
@@ -515,7 +474,7 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
             <div className="mt-4 space-y-4 text-sm">
               <div>
                 <div className="mb-2 flex items-center justify-between">
-                  <span className="muted-text">Memory strength</span>
+                  <span className="muted-text">Память</span>
                   <span>{Math.round(currentCard.effectiveMemoryStrength)}%</span>
                 </div>
                 <div className="progress-track h-3">
@@ -543,10 +502,10 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
           <div className="glass-panel p-5">
             <p className="text-sm font-semibold">Что дальше</p>
             <div className="mt-4 space-y-3 text-sm muted-text">
-              <p>1 день без повторения даёт мягкое снижение памяти.</p>
-              <p>3 дня поднимают forgetting score заметно сильнее.</p>
-              <p>7 дней переводят карточку в приоритетное повторение.</p>
-              <p>14+ дней и ошибка могут откатить этап назад.</p>
+              <p>Чем дольше карточка живёт без ошибок, тем дальше уходит следующий повтор.</p>
+              <p>Подсказки помогают вспомнить материал, но ограничивают оценку уровнем «Трудно».</p>
+              <p>Основной цикл держит только смысл и обратное вспоминание, чтобы не перегружать обучение.</p>
+              <p>Пиньинь и аудио остаются отдельной вспомогательной практикой, а не обязательным этапом.</p>
             </div>
           </div>
         </aside>
@@ -554,4 +513,3 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
     </div>
   );
 }
-

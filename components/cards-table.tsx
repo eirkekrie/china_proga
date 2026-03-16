@@ -92,8 +92,6 @@ export function CardsTable() {
             <option value="all">Все этапы</option>
             <option value="hanzi_to_translation">Stage 1</option>
             <option value="translation_to_hanzi">Stage 2</option>
-            <option value="hanzi_to_pinyin">Stage 3</option>
-            <option value="hanzi_to_pronunciation">Stage 4</option>
           </select>
 
           <select

@@ -1,15 +1,15 @@
 ﻿import type { AudioManifest, AudioManifestEntry, Card } from "@/lib/types";
 import { buildCardKey } from "@/lib/utils";
 
-export interface PronunciationEngine {
-  play(card: Card): Promise<PronunciationPlaybackResult>;
+export interface CardAudioEngine {
+  play(card: Card): Promise<CardAudioPlaybackResult>;
 }
 
-export type PronunciationPlaybackSource = "wav";
+export type CardAudioPlaybackSource = "wav";
 
-export type PronunciationPlaybackResult = {
+export type CardAudioPlaybackResult = {
   played: boolean;
-  source: PronunciationPlaybackSource | null;
+  source: CardAudioPlaybackSource | null;
 };
 
 const AUDIO_MANIFEST_URL = "/audio/cards/manifest.json";
@@ -41,7 +41,7 @@ async function loadAudioManifest() {
   return audioManifestPromise;
 }
 
-class HybridPronunciationEngine implements PronunciationEngine {
+class WavCardAudioEngine implements CardAudioEngine {
   private audioElement: HTMLAudioElement | null = null;
   private manifestEntryCache = new Map<string, AudioManifestEntry | null>();
 
@@ -87,18 +87,9 @@ class HybridPronunciationEngine implements PronunciationEngine {
     }
   }
 
-  private async playPreGenerated(card: Card) {
+  async play(card: Card): Promise<CardAudioPlaybackResult> {
     const entry = await this.getManifestEntry(card);
-    if (!entry?.path) {
-      return false;
-    }
-
-    return this.playAudioUrl(entry.path);
-  }
-
-  async play(card: Card): Promise<PronunciationPlaybackResult> {
-    const preGeneratedPlayed = await this.playPreGenerated(card);
-    if (preGeneratedPlayed) {
+    if (entry?.path && (await this.playAudioUrl(entry.path))) {
       return {
         played: true,
         source: "wav",
@@ -112,4 +103,4 @@ class HybridPronunciationEngine implements PronunciationEngine {
   }
 }
 
-export const pronunciationEngine = new HybridPronunciationEngine();
+export const cardAudioEngine = new WavCardAudioEngine();

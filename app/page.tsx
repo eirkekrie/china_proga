@@ -4,7 +4,10 @@ import Link from "next/link";
 import { ImportPanel } from "@/components/import-panel";
 import { useStudy } from "@/context/study-context";
 import { STAGE_LABELS } from "@/lib/constants";
+import { learningStages, type LearningStage } from "@/lib/types";
 import { formatDuration } from "@/lib/utils";
+
+const dashboardStages: LearningStage[] = [...learningStages];
 
 export default function HomePage() {
   const { hydrated, metrics, stats } = useStudy();
@@ -22,32 +25,32 @@ export default function HomePage() {
     {
       href: "/learn",
       title: "Начать обучение",
-      description: "Поэтапная работа от смысла к чтению и произношению.",
+      description: "Двухэтапное освоение: сначала смысл, затем обратное вспоминание иероглифа.",
     },
     {
       href: "/review",
       title: "Повторение",
-      description: "Очередь по forgetting score и сроку следующего показа.",
+      description: "Очередь по сроку повтора, FSRS и текущему уровню забывания карточек.",
     },
     {
       href: "/test",
       title: "Тест",
-      description: "Отдельные режимы проверки по каждому типу вопроса.",
+      description: "Отдельные режимы проверки на перевод, иероглиф и пиньинь.",
     },
     {
       href: "/tones",
       title: "Тоновые тренировки",
-      description: "Мини-режим на 1-й, 2-й, 3-й и 4-й тоны и похожие слоги.",
+      description: "Мини-режим на различение 1-го, 2-го, 3-го и 4-го тона и похожих слогов.",
     },
     {
       href: "/cards",
       title: "Все карточки",
-      description: "Поиск, сортировка, фильтры и диагностика памяти.",
+      description: "Поиск, сортировка, фильтры и диагностика памяти по каждой карточке.",
     },
     {
       href: "/stats",
       title: "Статистика",
-      description: "Время, серия дней, точность и недельная активность.",
+      description: "Время обучения, серия дней, активность по неделе и общий прогресс.",
     },
   ];
 
@@ -62,12 +65,11 @@ export default function HomePage() {
           <div className="space-y-5">
             <span className="pill w-fit">Учебная система</span>
             <h1 className="max-w-4xl text-4xl font-semibold tracking-[-0.06em] sm:text-5xl">
-              Китайские иероглифы с этапами освоения, контролем забывания, произношением и отдельной практикой тонов.
+              Китайские иероглифы с поэтапным освоением, FSRS-повторами и отдельной практикой тонов.
             </h1>
             <p className="max-w-3xl text-base muted-text">
-              Приложение не крутит карточки случайно. Оно ведёт через смысл, обратное вспоминание, пиньинь и
-              произношение, а затем возвращает слова в повторение по мере ослабления памяти. Отдельный мини-режим
-              помогает разбирать тоновые семьи вроде ma1 / ma2 / ma3 / ma4.
+              Приложение не крутит карточки случайно. Сначала мы закрепляем смысл, затем вспоминаем иероглиф по переводу,
+              а чтение и тоны выносим в отдельные режимы практики, чтобы не перегружать основной цикл обучения.
             </p>
             <div className="flex flex-wrap gap-3">
               <Link href="/learn" className="btn-primary">
@@ -123,19 +125,19 @@ export default function HomePage() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <span className="pill w-fit">Пайплайн обучения</span>
-            <h2 className="mt-4 text-2xl font-semibold tracking-[-0.04em]">Движение по этапам</h2>
+            <h2 className="mt-4 text-2xl font-semibold tracking-[-0.04em]">Как движутся карточки</h2>
           </div>
           <p className="max-w-2xl text-sm muted-text">
-            Карточки двигаются только при стабильных правильных ответах подряд. Ошибки и паузы в повторении повышают
-            forgetting score и возвращают карточку к более частой практике.
+            Карточки двигаются дальше только при стабильных правильных ответах. Ошибки и большие паузы в повторении
+            повышают риск забывания, а FSRS пересчитывает следующий срок показа и возвращает карточку в более частую практику.
           </p>
         </div>
 
-        <div className="mt-6 grid gap-4 xl:grid-cols-4">
-          {Object.entries(metrics.stageBreakdown).map(([stage, count]) => (
+        <div className="mt-6 grid gap-4 md:grid-cols-3">
+          {dashboardStages.map((stage) => (
             <div key={stage} className="rounded-[28px] border border-white/10 bg-white/5 p-5">
-              <p className="text-sm font-semibold">{STAGE_LABELS[stage as keyof typeof metrics.stageBreakdown]}</p>
-              <p className="mt-4 text-3xl font-semibold tracking-[-0.04em]">{count}</p>
+              <p className="text-sm font-semibold">{STAGE_LABELS[stage]}</p>
+              <p className="mt-4 text-3xl font-semibold tracking-[-0.04em]">{metrics.stageBreakdown[stage]}</p>
             </div>
           ))}
         </div>

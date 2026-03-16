@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useEffect, useRef, useState } from "react";
-import { pronunciationEngine } from "@/lib/audio";
+import { cardAudioEngine } from "@/lib/audio";
 import { useStudy } from "@/context/study-context";
 import { buildToneExercises } from "@/lib/tone-training";
 import { formatDuration } from "@/lib/utils";
@@ -118,7 +118,7 @@ export function ToneTrainingSession() {
     }
 
     setAudioNotice(null);
-    const playback = await pronunciationEngine.play(currentCard);
+    const playback = await cardAudioEngine.play(currentCard);
     setAudioSource(playback.source);
 
     if (!playback.played) {
@@ -360,4 +360,5 @@ export function ToneTrainingSession() {
     </div>
   );
 }
+
 

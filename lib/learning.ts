@@ -1,10 +1,17 @@
-import {
+﻿import {
   MAX_ACTIVE_LEARNING_CARDS,
   MAX_NEW_CARDS_IN_LEARN_QUEUE,
-  STAGE_BASE_INTERVAL_DAYS,
   STAGE_REQUIRED_STREAK,
   STAGE_SUCCESS_THRESHOLD,
 } from "@/lib/constants";
+import {
+  deriveFsrsEaseFactor,
+  deriveFsrsForgettingScore,
+  deriveFsrsInterval,
+  deriveFsrsMemoryStrength,
+  getFsrsDaysUntilDue,
+  reviewWithFsrs,
+} from "@/lib/fsrs";
 import {
   learningStages,
   type Card,
@@ -19,6 +26,7 @@ import {
 import { clamp, diffInDays } from "@/lib/utils";
 
 const DAY_MS = 1000 * 60 * 60 * 24;
+const coreLearningStages: LearningStage[] = ["hanzi_to_translation", "translation_to_hanzi"];
 
 const overdueRank: Record<DerivedCard["overdueLevel"], number> = {
   fresh: 1,
@@ -31,14 +39,19 @@ export function getStageIndex(stage: LearningStage) {
   return learningStages.indexOf(stage);
 }
 
+function getCoreStageIndex(stage: LearningStage) {
+  const index = coreLearningStages.indexOf(stage);
+  return index >= 0 ? index : coreLearningStages.length - 1;
+}
+
 export function getNextStage(stage: LearningStage) {
-  const index = getStageIndex(stage);
-  return learningStages[index + 1] ?? null;
+  const index = coreLearningStages.indexOf(stage);
+  return index >= 0 ? coreLearningStages[index + 1] ?? null : null;
 }
 
 export function getPreviousStage(stage: LearningStage) {
-  const index = getStageIndex(stage);
-  return index > 0 ? learningStages[index - 1] : null;
+  const index = coreLearningStages.indexOf(stage);
+  return index > 0 ? coreLearningStages[index - 1] : null;
 }
 
 export function getOverallProgressPercent(card: Card) {
@@ -46,42 +59,48 @@ export function getOverallProgressPercent(card: Card) {
     return 100;
   }
 
-  const stageWeight = 100 / learningStages.length;
+  const stageWeight = 100 / coreLearningStages.length;
   const currentStageProgress = card.stageProgress[card.currentStage] / (100 / stageWeight);
-  return clamp(Math.round(getStageIndex(card.currentStage) * stageWeight + currentStageProgress), 0, 100);
+  return clamp(Math.round(getCoreStageIndex(card.currentStage) * stageWeight + currentStageProgress), 0, 100);
+}
+
+function computeOverdueLevel(card: Card, effectiveForgettingScore: number, daysUntilDue: number) {
+  if (card.status === "new" && card.repetitions === 0) {
+    return "fresh" as const;
+  }
+
+  if (daysUntilDue <= -7 || effectiveForgettingScore >= 78) {
+    return "critical" as const;
+  }
+
+  if (daysUntilDue <= 0) {
+    return "due" as const;
+  }
+
+  if (daysUntilDue <= 1 || effectiveForgettingScore >= 34) {
+    return "soon" as const;
+  }
+
+  return "fresh" as const;
 }
 
 export function getEffectiveCardState(card: Card, now = new Date()): DerivedCard {
-  const stageIndex = getStageIndex(card.currentStage);
+  const stageIndex = getCoreStageIndex(card.currentStage);
   const referenceDate = new Date(card.lastSeenAt ?? card.createdAt);
   const daysSinceSeen = diffInDays(referenceDate, now);
-  const retention = clamp(card.memoryStrength / 100, 0.08, 0.98);
-  const forgettingRise = daysSinceSeen * (10 + stageIndex * 3) * (1 - retention * 0.78);
-  const memoryDecay = daysSinceSeen * (3.6 - Math.min(card.easeFactor, 3) * 0.72);
-
-  const effectiveForgettingScore = clamp(card.forgettingScore + forgettingRise, 0, 100);
-  const effectiveMemoryStrength = clamp(card.memoryStrength - memoryDecay, 0, 100);
-  const reviewTimestamp = card.nextReviewAt ? new Date(card.nextReviewAt).getTime() : 0;
-  const isDue = !card.nextReviewAt || reviewTimestamp <= now.getTime() || effectiveForgettingScore >= 64;
-
-  let overdueLevel: DerivedCard["overdueLevel"] = "fresh";
-  if (effectiveForgettingScore >= 86 || daysSinceSeen >= 14) {
-    overdueLevel = "critical";
-  } else if (isDue) {
-    overdueLevel = "due";
-  } else if (effectiveForgettingScore >= 34 || daysSinceSeen >= 3) {
-    overdueLevel = "soon";
-  }
+  const effectiveMemoryStrength = deriveFsrsMemoryStrength(card.fsrs, now);
+  const effectiveForgettingScore = deriveFsrsForgettingScore(card.fsrs, now);
+  const daysUntilDue = getFsrsDaysUntilDue(card.fsrs, now);
+  const isDue = card.status !== "new" && daysUntilDue <= 0;
+  const overdueLevel = computeOverdueLevel(card, effectiveForgettingScore, daysUntilDue);
 
   let computedStatus: CardStatus = card.status;
-  if (card.status === "mastered" && (isDue || effectiveForgettingScore >= 60)) {
-    computedStatus = "review";
-  } else if (card.status === "new" && card.repetitions > 0) {
-    computedStatus = "learning";
-  } else if (card.status !== "new" && card.status !== "mastered" && isDue) {
-    computedStatus = "review";
-  } else if (card.status !== "new" && card.status !== "mastered") {
-    computedStatus = "learning";
+  if (card.status === "new" && card.repetitions === 0) {
+    computedStatus = "new";
+  } else if (card.status === "mastered") {
+    computedStatus = isDue ? "review" : "mastered";
+  } else {
+    computedStatus = isDue || card.status === "review" ? "review" : "learning";
   }
 
   return {
@@ -97,16 +116,31 @@ export function getEffectiveCardState(card: Card, now = new Date()): DerivedCard
   };
 }
 
+function getDaysUntilDue(card: DerivedCard, now = new Date()) {
+  if (!card.nextReviewAt) {
+    return card.status === "new" ? Number.POSITIVE_INFINITY : 0;
+  }
+
+  return (new Date(card.nextReviewAt).getTime() - now.getTime()) / DAY_MS;
+}
+
 function compareByUrgency(left: DerivedCard, right: DerivedCard) {
+  const leftDaysUntilDue = getDaysUntilDue(left);
+  const rightDaysUntilDue = getDaysUntilDue(right);
+  const leftOverdueDays = Math.max(0, -leftDaysUntilDue);
+  const rightOverdueDays = Math.max(0, -rightDaysUntilDue);
+
   const leftScore =
     overdueRank[left.overdueLevel] * 100 +
     left.effectiveForgettingScore +
-    Math.min(left.daysSinceSeen * 4, 35) -
+    Math.min(left.daysSinceSeen * 3, 30) +
+    Math.min(leftOverdueDays * 8, 48) -
     left.stageIndex * 3;
   const rightScore =
     overdueRank[right.overdueLevel] * 100 +
     right.effectiveForgettingScore +
-    Math.min(right.daysSinceSeen * 4, 35) -
+    Math.min(right.daysSinceSeen * 3, 30) +
+    Math.min(rightOverdueDays * 8, 48) -
     right.stageIndex * 3;
 
   return rightScore - leftScore;
@@ -148,21 +182,6 @@ export function buildStudyQueue(
     const stage = forcedStage ?? "hanzi_to_translation";
     const minimumStageIndex = getStageIndex(stage);
 
-    if (stage === "hanzi_to_pronunciation") {
-      return derivedCards.sort((left, right) => {
-        if (left.repetitions !== right.repetitions) {
-          return left.repetitions - right.repetitions;
-        }
-
-        const urgencyDelta = compareByUrgency(left, right);
-        if (urgencyDelta !== 0) {
-          return urgencyDelta;
-        }
-
-        return left.stageIndex - right.stageIndex;
-      });
-    }
-
     return derivedCards
       .filter((card) => {
         if (card.status === "new") {
@@ -180,7 +199,11 @@ export function buildStudyQueue(
   }
 
   const reviewCards = derivedCards
-    .filter((card) => (card.status !== "mastered" || card.computedStatus === "review") && (card.computedStatus === "review" || card.overdueLevel === "critical"))
+    .filter(
+      (card) =>
+        (card.status !== "mastered" || card.computedStatus === "review") &&
+        (card.computedStatus === "review" || card.overdueLevel === "critical"),
+    )
     .sort(compareByUrgency);
   const reviewIds = new Set(reviewCards.map((card) => card.id));
 
@@ -223,32 +246,6 @@ export function buildStudyQueue(
   return [...reviewCards, ...activeLearningCards, ...newCards];
 }
 
-function calculateNextIntervalDays(
-  previousInterval: number,
-  grade: ReviewGrade,
-  easeFactor: number,
-  memoryStrength: number,
-  stage: LearningStage,
-) {
-  const base = STAGE_BASE_INTERVAL_DAYS[stage];
-
-  if (grade === "again") {
-    return 0.2;
-  }
-
-  if (grade === "hard") {
-    return clamp(
-      Math.max(base * 0.75, previousInterval > 0 ? previousInterval * 0.65 : base * 0.8),
-      0.45,
-      14,
-    );
-  }
-
-  const multiplier = 1 + memoryStrength / 220;
-  const next = previousInterval > 0 ? previousInterval * easeFactor * multiplier : base * multiplier;
-  return clamp(Math.max(base, next), 0.75, 45);
-}
-
 export function applyReview(card: Card, grade: ReviewGrade, responseTimeMs: number, now = new Date()) {
   const derived = getEffectiveCardState(card, now);
   const activeStage = card.currentStage;
@@ -264,20 +261,10 @@ export function applyReview(card: Card, grade: ReviewGrade, responseTimeMs: numb
   let status: CardStatus = card.status === "new" ? "learning" : derived.computedStatus;
   let streakCorrect = grade === "again" ? 0 : card.streakCorrect + 1;
   let mistakes = card.mistakes + (grade === "again" ? 1 : 0);
-  let memoryStrength = clamp(
-    derived.effectiveMemoryStrength + { again: -18, hard: 8, good: 16 }[grade],
-    0,
-    100,
-  );
-  let forgettingScore = clamp(
-    derived.effectiveForgettingScore + { again: 24, hard: -8, good: -18 }[grade],
-    0,
-    100,
-  );
-  let easeFactor = clamp(card.easeFactor + { again: -0.2, hard: -0.04, good: 0.08 }[grade], 1.3, 3.1);
 
-  const nextInterval = calculateNextIntervalDays(card.interval, grade, easeFactor, memoryStrength, activeStage);
-  let nextReviewAt = new Date(now.getTime() + nextInterval * DAY_MS).toISOString();
+  const fsrsReview = reviewWithFsrs(card.fsrs, grade, now);
+  const fsrs = fsrsReview.snapshot;
+  const nextReviewAt = fsrs.due;
 
   if (
     grade !== "again" &&
@@ -290,11 +277,10 @@ export function applyReview(card: Card, grade: ReviewGrade, responseTimeMs: numb
       currentStage = nextStage;
       streakCorrect = 0;
       status = "learning";
-      forgettingScore = clamp(forgettingScore - 10, 0, 100);
-      nextReviewAt = new Date(now.getTime() + Math.max(0.75, nextInterval) * DAY_MS).toISOString();
     } else {
       status = "mastered";
-      nextReviewAt = new Date(now.getTime() + Math.max(5, nextInterval * 1.35) * DAY_MS).toISOString();
+      currentStage = "translation_to_hanzi";
+      stageProgress.translation_to_hanzi = 100;
     }
   }
 
@@ -303,7 +289,7 @@ export function applyReview(card: Card, grade: ReviewGrade, responseTimeMs: numb
 
     const shouldRollback =
       (derived.overdueLevel === "critical" && derived.daysSinceSeen >= 7) ||
-      forgettingScore >= 86 ||
+      derived.effectiveForgettingScore >= 82 ||
       mistakes >= 4;
 
     if (shouldRollback) {
@@ -319,10 +305,15 @@ export function applyReview(card: Card, grade: ReviewGrade, responseTimeMs: numb
     status = "review";
   }
 
-  const repetitions = card.repetitions + 1;
+  const repetitions = Math.max(card.repetitions + 1, fsrs.reps);
   const totalTimeSpent = card.totalTimeSpent + responseTimeMs;
   const averageResponseTime =
     repetitions > 0 ? Math.round(totalTimeSpent / repetitions) : Math.round(responseTimeMs);
+
+  const memoryStrength = deriveFsrsMemoryStrength(fsrs, now);
+  const forgettingScore = deriveFsrsForgettingScore(fsrs, now);
+  const easeFactor = deriveFsrsEaseFactor(fsrs, now);
+  const interval = deriveFsrsInterval(fsrs, now);
 
   return {
     ...card,
@@ -333,12 +324,13 @@ export function applyReview(card: Card, grade: ReviewGrade, responseTimeMs: numb
     mistakes,
     streakCorrect,
     easeFactor,
-    interval: nextInterval,
+    interval,
     memoryStrength,
     forgettingScore,
     lastSeenAt: now.toISOString(),
     lastCorrectAt: grade === "again" ? card.lastCorrectAt : now.toISOString(),
     nextReviewAt,
+    fsrs,
     totalTimeSpent,
     averageResponseTime,
   };
@@ -350,7 +342,6 @@ export function computeDashboard(cards: Card[], _stats: StudyStats, now = new Da
     hanzi_to_translation: 0,
     translation_to_hanzi: 0,
     hanzi_to_pinyin: 0,
-    hanzi_to_pronunciation: 0,
   };
 
   let newCount = 0;
@@ -376,7 +367,7 @@ export function computeDashboard(cards: Card[], _stats: StudyStats, now = new Da
       reviewCount += 1;
     }
 
-    if (card.isDue || card.effectiveForgettingScore >= 55) {
+    if (card.status !== "new" && (card.isDue || card.effectiveForgettingScore >= 55)) {
       dueTodayCount += 1;
     }
   });
