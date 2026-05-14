@@ -1,9 +1,10 @@
 "use client";
 
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { applyReview, buildStudyQueue, computeDashboard } from "@/lib/learning";
+import { applyReview, buildStudyQueue, computeDashboard, getEffectiveCardState, resetCardProgress } from "@/lib/learning";
 import { parseCardLines } from "@/lib/parser";
+import { ALL_LESSONS_ID, UNASSIGNED_LESSON_ID } from "@/lib/constants";
 import {
   loadPersistedState,
   normalizePersistedState,
@@ -16,27 +17,107 @@ import type {
   DashboardMetrics,
   DerivedCard,
   LearningStage,
+  LessonSummary,
   ParseResult,
   ReviewGrade,
   StudyFlow,
+  StudyQueueOptions,
   StudyStats,
   ThemeMode,
 } from "@/lib/types";
 
 type StudyContextValue = {
   cards: Card[];
+  filteredCards: Card[];
+  availableLessons: LessonSummary[];
+  selectedLessonId: string;
   stats: StudyStats;
   theme: ThemeMode;
   hydrated: boolean;
   metrics: DashboardMetrics;
+  setSelectedLessonId: (lessonId: string) => void;
   setTheme: (theme: ThemeMode) => void;
   importCards: (rawText: string) => ParseResult;
+  updateCard: (cardId: string, patch: CardManagementPatch) => Card | null;
+  deleteCards: (cardIds: string[]) => number;
+  resetCardsProgress: (cardIds: string[]) => number;
+  moveCardsToLesson: (cardIds: string[], lesson: CardLessonPatch) => number;
   answerCard: (cardId: string, grade: ReviewGrade, responseTimeMs: number) => Card | null;
+  resetLessonProgress: (lessonId: string) => number;
   addStudyTime: (durationMs: number) => void;
-  getQueue: (flow: StudyFlow, forcedStage?: LearningStage) => DerivedCard[];
+  getQueue: (flow: StudyFlow, forcedStage?: LearningStage, options?: StudyQueueOptions) => DerivedCard[];
 };
 
+export type CardLessonPatch = Pick<Card, "lessonId" | "lessonTitle">;
+export type CardManagementPatch = Partial<Pick<Card, "hanzi" | "pinyin" | "translation">> & Partial<CardLessonPatch>;
+
 const StudyContext = createContext<StudyContextValue | null>(null);
+
+function getLessonNumber(title: string) {
+  const match = title.match(/\d+/);
+  return match ? Number(match[0]) : Number.POSITIVE_INFINITY;
+}
+
+function sortLessons(left: LessonSummary, right: LessonSummary) {
+  const leftNumber = getLessonNumber(left.title);
+  const rightNumber = getLessonNumber(right.title);
+  if (leftNumber !== rightNumber) {
+    if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) {
+      return leftNumber - rightNumber;
+    }
+
+    if (Number.isFinite(leftNumber)) {
+      return -1;
+    }
+
+    if (Number.isFinite(rightNumber)) {
+      return 1;
+    }
+  }
+
+  return left.title.localeCompare(right.title, "ru", { numeric: true, sensitivity: "base" });
+}
+
+function buildAvailableLessons(cards: Card[]): LessonSummary[] {
+  const lessons = new Map<string, LessonSummary>();
+  const now = new Date();
+
+  cards.forEach((card) => {
+    if (card.lessonId === UNASSIGNED_LESSON_ID) {
+      return;
+    }
+
+    const derived = getEffectiveCardState(card, now);
+    const lesson = lessons.get(card.lessonId);
+    if (lesson) {
+      lesson.count += 1;
+      lesson.newCount += card.status === "new" ? 1 : 0;
+      lesson.learningCount += card.status === "learning" ? 1 : 0;
+      lesson.reviewCount += derived.computedStatus === "review" ? 1 : 0;
+      lesson.masteredCount += card.status === "mastered" ? 1 : 0;
+      lesson.progressPercent += derived.overallProgressPercent;
+      return;
+    }
+
+    lessons.set(card.lessonId, {
+      id: card.lessonId,
+      title: card.lessonTitle,
+      count: 1,
+      newCount: card.status === "new" ? 1 : 0,
+      learningCount: card.status === "learning" ? 1 : 0,
+      reviewCount: derived.computedStatus === "review" ? 1 : 0,
+      masteredCount: card.status === "mastered" ? 1 : 0,
+      progressPercent: derived.overallProgressPercent,
+    });
+  });
+
+  return [...lessons.values()]
+    .map((lesson) => ({
+      ...lesson,
+      progressPercent: lesson.count > 0 ? Math.round(lesson.progressPercent / lesson.count) : 0,
+    }))
+    .sort(sortLessons);
+}
 
 function shouldPreferCachedState(cached: PersistedAppState, remote: PersistedAppState) {
   const cachedPracticedCards = cached.cards.filter((card) => card.repetitions > 0 || card.status !== "new").length;
@@ -112,6 +193,7 @@ function recordStudyTime(stats: StudyStats, now: Date, durationMs: number) {
 
 export function StudyProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<PersistedAppState>(loadPersistedState());
+  const [selectedLessonId, setSelectedLessonId] = useState(ALL_LESSONS_ID);
   const [hydrated, setHydrated] = useState(false);
   const persistedJsonRef = useRef<string>("");
 
@@ -193,7 +275,25 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     document.documentElement.classList.toggle("dark", state.theme === "dark");
   }, [state.theme]);
 
-  const metrics = computeDashboard(state.cards, state.stats, new Date());
+  const availableLessons = useMemo(() => buildAvailableLessons(state.cards), [state.cards]);
+  const filteredCards = useMemo(
+    () =>
+      selectedLessonId === ALL_LESSONS_ID
+        ? state.cards
+        : state.cards.filter((card) => card.lessonId === selectedLessonId),
+    [selectedLessonId, state.cards],
+  );
+  const metrics = computeDashboard(filteredCards, state.stats, new Date());
+
+  useEffect(() => {
+    if (
+      selectedLessonId !== ALL_LESSONS_ID &&
+      selectedLessonId !== UNASSIGNED_LESSON_ID &&
+      !availableLessons.some((lesson) => lesson.id === selectedLessonId)
+    ) {
+      setSelectedLessonId(ALL_LESSONS_ID);
+    }
+  }, [availableLessons, selectedLessonId]);
 
   function setTheme(theme: ThemeMode) {
     setState((previous) => ({
@@ -214,6 +314,108 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     }));
 
     return result;
+  }
+
+  function updateCard(cardId: string, patch: CardManagementPatch) {
+    let updatedCard: Card | null = null;
+
+    setState((previous) => {
+      const cards = previous.cards.map((card) => {
+        if (card.id !== cardId) {
+          return card;
+        }
+
+        updatedCard = {
+          ...card,
+          ...patch,
+          hanzi: patch.hanzi?.trim() ?? card.hanzi,
+          pinyin: patch.pinyin?.trim() ?? card.pinyin,
+          translation: patch.translation?.trim() ?? card.translation,
+          lessonId: patch.lessonId?.trim() || card.lessonId,
+          lessonTitle: patch.lessonTitle?.trim() || card.lessonTitle,
+        };
+        return updatedCard;
+      });
+
+      return {
+        ...previous,
+        cards,
+      };
+    });
+
+    return updatedCard;
+  }
+
+  function deleteCards(cardIds: string[]) {
+    const targetIds = new Set(cardIds);
+    if (targetIds.size === 0) {
+      return 0;
+    }
+
+    const deletedCount = state.cards.filter((card) => targetIds.has(card.id)).length;
+    setState((previous) => ({
+      ...previous,
+      cards: previous.cards.filter((card) => !targetIds.has(card.id)),
+    }));
+
+    return deletedCount;
+  }
+
+  function resetCardsProgress(cardIds: string[]) {
+    const now = new Date();
+    const targetIds = new Set(cardIds);
+    if (targetIds.size === 0) {
+      return 0;
+    }
+
+    let resetCount = 0;
+    setState((previous) => {
+      const cards = previous.cards.map((card) => {
+        if (!targetIds.has(card.id)) {
+          return card;
+        }
+
+        resetCount += 1;
+        return resetCardProgress(card, now);
+      });
+
+      return {
+        ...previous,
+        cards,
+      };
+    });
+
+    return resetCount;
+  }
+
+  function moveCardsToLesson(cardIds: string[], lesson: CardLessonPatch) {
+    const targetIds = new Set(cardIds);
+    if (targetIds.size === 0) {
+      return 0;
+    }
+
+    let movedCount = 0;
+    setState((previous) => {
+      const cards = previous.cards.map((card) => {
+        if (!targetIds.has(card.id)) {
+          return card;
+        }
+
+        movedCount += 1;
+        return {
+          ...card,
+          lessonId: lesson.lessonId,
+          lessonTitle: lesson.lessonTitle,
+        };
+      });
+
+      return {
+        ...previous,
+        cards,
+      };
+    });
+
+    return movedCount;
   }
 
   function answerCard(cardId: string, grade: ReviewGrade, responseTimeMs: number) {
@@ -247,6 +449,34 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     return updatedCard;
   }
 
+  function resetLessonProgress(lessonId: string) {
+    const now = new Date();
+    const targetIds = new Set(
+      state.cards
+        .filter((card) =>
+          lessonId === ALL_LESSONS_ID ? card.lessonId !== UNASSIGNED_LESSON_ID : card.lessonId === lessonId,
+        )
+        .map((card) => card.id),
+    );
+
+    setState((previous) => {
+      const cards = previous.cards.map((card) => {
+        if (!targetIds.has(card.id)) {
+          return card;
+        }
+
+        return resetCardProgress(card, now);
+      });
+
+      return {
+        ...previous,
+        cards,
+      };
+    });
+
+    return targetIds.size;
+  }
+
   function addStudyTime(durationMs: number) {
     if (durationMs <= 0) {
       return;
@@ -258,21 +488,30 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     }));
   }
 
-  function getQueue(flow: StudyFlow, forcedStage?: LearningStage) {
-    return buildStudyQueue(state.cards, flow, new Date(), forcedStage);
+  function getQueue(flow: StudyFlow, forcedStage?: LearningStage, options?: StudyQueueOptions) {
+    return buildStudyQueue(filteredCards, flow, new Date(), forcedStage, options);
   }
 
   return (
     <StudyContext.Provider
       value={{
         cards: state.cards,
+        filteredCards,
+        availableLessons,
+        selectedLessonId,
         stats: state.stats,
         theme: state.theme,
         hydrated,
         metrics,
+        setSelectedLessonId,
         setTheme,
         importCards,
+        updateCard,
+        deleteCards,
+        resetCardsProgress,
+        moveCardsToLesson,
         answerCard,
+        resetLessonProgress,
         addStudyTime,
         getQueue,
       }}
