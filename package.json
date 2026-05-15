@@ -6,9 +6,16 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "generate:audio": "python scripts/generate_card_audio.py"
+    "generate:audio": "python scripts/generate_card_audio.py",
+    "build:android:web": "node scripts/build_capacitor_web.mjs",
+    "android:sync": "npm run build:android:web && cap sync android",
+    "android:open": "cap open android",
+    "android:build:debug": "npm run android:sync && cd android && gradlew.bat assembleDebug"
   },
   "dependencies": {
+    "@capacitor/android": "^6.2.1",
+    "@capacitor/cli": "^6.2.1",
+    "@capacitor/core": "^6.2.1",
     "hanzi-writer": "^3.7.3",
     "next": "15.2.1",
     "react": "19.0.0",

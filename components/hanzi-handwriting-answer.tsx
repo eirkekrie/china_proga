@@ -45,6 +45,7 @@ export function HanziHandwritingAnswer({
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const writerRef = useRef<HanziWriterLike | null>(null);
+  const safeActiveIndex = characters.length > 0 ? Math.min(activeIndex, characters.length - 1) : 0;
 
   useEffect(() => {
     setActiveIndex(0);
@@ -72,7 +73,11 @@ export function HanziHandwritingAnswer({
     }
 
     let disposed = false;
-    const currentCharacter = characters[activeIndex];
+    const currentCharacter = characters[safeActiveIndex];
+
+    if (!currentCharacter) {
+      return;
+    }
 
     async function bootWriter() {
       setIsLoading(true);
@@ -118,7 +123,7 @@ export function HanziHandwritingAnswer({
 
             setTotalMistakes((value) => value + summary.totalMistakes);
             setCurrentMistakes(0);
-            setCompleted((previous) => previous.map((value, index) => (index === activeIndex ? true : value)));
+            setCompleted((previous) => previous.map((value, index) => (index === safeActiveIndex ? true : value)));
             setActiveIndex((index) => Math.min(index + 1, Math.max(0, characters.length - 1)));
             setResetToken((value) => value + 1);
           },
@@ -179,7 +184,7 @@ export function HanziHandwritingAnswer({
             key={`${character}-${index}`}
             className={[
               "rounded-full border px-3 py-2 text-sm font-medium",
-              index === activeIndex && !completed[index]
+              index === safeActiveIndex && !completed[index]
                 ? "border-[rgba(var(--accent),0.42)] bg-[rgba(var(--accent),0.14)] text-[rgb(var(--accent))]"
                 : completed[index]
                   ? "border-[rgba(var(--success),0.4)] bg-[rgba(var(--success),0.08)] text-[rgb(var(--success))]"
@@ -198,7 +203,7 @@ export function HanziHandwritingAnswer({
             {completedCharacters}/{characters.length}
           </p>
           <p className="mt-3 text-sm muted-text">
-            Текущий знак: <strong>{isReady ? "готово" : activeIndex + 1}</strong>
+            Текущий знак: <strong>{isReady ? "готово" : safeActiveIndex + 1}</strong>
           </p>
           <p className="mt-2 text-sm muted-text">
             Ошибок в сессии: <strong>{totalMistakes + currentMistakes}</strong>

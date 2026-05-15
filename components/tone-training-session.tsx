@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { cardAudioEngine } from "@/lib/audio";
 import { useStudy } from "@/context/study-context";
+import { UNASSIGNED_LESSON_ID } from "@/lib/constants";
 import { buildToneExercises } from "@/lib/tone-training";
 import { formatDuration } from "@/lib/utils";
 import type { ToneExercise, ToneTrainingMode } from "@/lib/types";
@@ -43,8 +44,12 @@ function getModeTaskLabel(mode: ToneTrainingMode) {
   return "Выберите правильный слог";
 }
 
+function getVisibleLessonTitle(card: { lessonId: string; lessonTitle: string } | null) {
+  return card && card.lessonId !== UNASSIGNED_LESSON_ID ? card.lessonTitle : null;
+}
+
 export function ToneTrainingSession() {
-  const { addStudyTime, cards, hydrated, stats } = useStudy();
+  const { addStudyTime, filteredCards, hydrated, stats } = useStudy();
   const [mode, setMode] = useState<ToneTrainingMode>("tone_number");
   const [exercisePool, setExercisePool] = useState<ToneExercise[]>([]);
   const [currentExerciseId, setCurrentExerciseId] = useState<string | null>(null);
@@ -63,12 +68,13 @@ export function ToneTrainingSession() {
     queue.find((exercise) => !cooldownIds.includes(exercise.id)) ??
     queue[0] ??
     null;
-  const currentCard = cards.find((card) => card.id === currentExercise?.cardId) ?? null;
+  const currentCard = filteredCards.find((card) => card.id === currentExercise?.cardId) ?? null;
+  const visibleLessonTitle = getVisibleLessonTitle(currentCard);
   const accuracy = sessionCompleted > 0 ? Math.round((sessionCorrect / sessionCompleted) * 100) : 0;
 
   useEffect(() => {
-    setExercisePool(buildToneExercises(cards));
-  }, [cards]);
+    setExercisePool(buildToneExercises(filteredCards));
+  }, [filteredCards]);
 
   useEffect(() => {
     setCurrentExerciseId(null);
@@ -235,6 +241,7 @@ export function ToneTrainingSession() {
             <div className="rounded-[32px] border border-white/10 bg-white/5 p-6">
               <div className="grid gap-4 md:grid-cols-[1.15fr_0.85fr] md:items-center">
                 <div>
+                  {visibleLessonTitle ? <span className="pill mb-3 w-fit">{visibleLessonTitle}</span> : null}
                   <p className="display-hanzi text-[clamp(3.6rem,11vw,6.6rem)] font-semibold leading-none">
                     {currentExercise.hanzi}
                   </p>

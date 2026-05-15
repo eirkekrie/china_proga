@@ -27,6 +27,7 @@ export function HanziWritingPractice({ text }: HanziWriterPracticeProps) {
   const [completed, setCompleted] = useState<boolean[]>([]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const writerRef = useRef<HanziWriterLike | null>(null);
+  const safeActiveIndex = characters.length > 0 ? Math.min(activeIndex, characters.length - 1) : 0;
 
   useEffect(() => {
     setCompleted(Array.from({ length: characters.length }, () => false));
@@ -42,7 +43,11 @@ export function HanziWritingPractice({ text }: HanziWriterPracticeProps) {
     }
 
     let disposed = false;
-    const currentCharacter = characters[activeIndex];
+    const currentCharacter = characters[safeActiveIndex];
+
+    if (!currentCharacter) {
+      return;
+    }
 
     async function bootWriter() {
       setIsLoading(true);
@@ -92,7 +97,7 @@ export function HanziWritingPractice({ text }: HanziWriterPracticeProps) {
             }
 
             setMistakes(summary.totalMistakes);
-            setCompleted((previous) => previous.map((value, index) => (index === activeIndex ? true : value)));
+            setCompleted((previous) => previous.map((value, index) => (index === safeActiveIndex ? true : value)));
           },
         });
       } catch (cause) {
@@ -121,7 +126,7 @@ export function HanziWritingPractice({ text }: HanziWriterPracticeProps) {
   }
 
   const allCompleted = completed.length > 0 && completed.every(Boolean);
-  const currentCharacter = characters[activeIndex];
+  const currentCharacter = characters[safeActiveIndex] ?? characters[0];
 
   return (
     <div className="grid gap-3 rounded-[28px] border border-white/10 bg-white/5 p-5">
@@ -144,7 +149,7 @@ export function HanziWritingPractice({ text }: HanziWriterPracticeProps) {
                 type="button"
                 className={[
                   "rounded-full border px-3 py-2 text-sm font-medium transition",
-                  index === activeIndex
+                  index === safeActiveIndex
                     ? "border-[rgba(var(--accent),0.42)] bg-[rgba(var(--accent),0.14)] text-[rgb(var(--accent))]"
                     : completed[index]
                       ? "border-[rgba(var(--success),0.4)] bg-[rgba(var(--success),0.08)] text-[rgb(var(--success))]"
@@ -176,7 +181,7 @@ export function HanziWritingPractice({ text }: HanziWriterPracticeProps) {
               type="button"
               className="btn-ghost"
               onClick={() => {
-                setCompleted((previous) => previous.map((value, index) => (index === activeIndex ? false : value)));
+                setCompleted((previous) => previous.map((value, index) => (index === safeActiveIndex ? false : value)));
                 setResetToken((value) => value + 1);
               }}
             >

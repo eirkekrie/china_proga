@@ -433,6 +433,10 @@ export function CardsTable() {
                 <p className="font-medium">{STAGE_LABELS[card.currentStage]}</p>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <div className="flex items-center justify-between">
+                    <span className="muted-text">Прогресс</span>
+                    <strong>{card.overallProgressPercent}%</strong>
+                  </div>
+                  <div className="flex items-center justify-between">
                     <span className="muted-text">Сила памяти</span>
                     <strong>{Math.round(card.effectiveMemoryStrength)}%</strong>
                   </div>

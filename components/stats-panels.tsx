@@ -5,13 +5,13 @@ import { getEffectiveCardState } from "@/lib/learning";
 import { dayKey, formatDuration, formatMinutes } from "@/lib/utils";
 
 export function StatsPanels() {
-  const { cards, hydrated, metrics, stats } = useStudy();
+  const { filteredCards, hydrated, metrics, stats } = useStudy();
 
   if (!hydrated) {
     return <div className="glass-panel p-8 text-sm muted-text">Загружаю статистику…</div>;
   }
 
-  const derivedCards = cards.map((card) => getEffectiveCardState(card));
+  const derivedCards = filteredCards.map((card) => getEffectiveCardState(card));
   const activeDays = Math.max(1, Object.keys(stats.dailyStudyLog).length || (stats.totalStudyTime > 0 ? 1 : 0));
   const todayKey = dayKey(new Date());
   const weekEntries = Array.from({ length: 7 }, (_, index) => {
@@ -27,7 +27,7 @@ export function StatsPanels() {
 
   const weekTotal = weekEntries.reduce((sum, entry) => sum + entry.value, 0);
   const averagePerDay = stats.totalStudyTime / activeDays;
-  const studiedCards = cards.filter((card) => card.totalTimeSpent > 0);
+  const studiedCards = filteredCards.filter((card) => card.totalTimeSpent > 0);
   const averagePerCard =
     studiedCards.length > 0
       ? studiedCards.reduce((sum, card) => sum + card.totalTimeSpent, 0) / studiedCards.length

@@ -63,13 +63,13 @@ class Settings:
         return cls(
             host=os.getenv("QWEN_TTS_HOST", "127.0.0.1").strip() or "127.0.0.1",
             port=int(os.getenv("QWEN_TTS_PORT", "8001")),
-            model_id=os.getenv("QWEN_TTS_MODEL", "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice").strip()
-            or "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
+            model_id=os.getenv("QWEN_TTS_MODEL", "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice").strip()
+            or "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
             language=os.getenv("QWEN_TTS_LANGUAGE", "Chinese").strip() or "Chinese",
             device=os.getenv("QWEN_TTS_DEVICE", "auto").strip() or "auto",
             dtype=os.getenv("QWEN_TTS_DTYPE", "auto").strip() or "auto",
             attn_implementation=os.getenv("QWEN_TTS_ATTN_IMPLEMENTATION", "sdpa").strip() or "sdpa",
-            speaker=os.getenv("QWEN_TTS_SPEAKER", "vivian").strip() or "vivian",
+            speaker=os.getenv("QWEN_TTS_SPEAKER", "Uncle_Fu").strip() or "Uncle_Fu",
             instruct=os.getenv("QWEN_TTS_INSTRUCT", "").strip(),
             ref_audio=ref_audio,
             ref_text=ref_text,

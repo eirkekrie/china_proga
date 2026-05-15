@@ -9,6 +9,25 @@ export type CardStatus = "new" | "learning" | "review" | "mastered";
 export type ReviewGrade = "again" | "hard" | "good";
 export type StudyFlow = "learn" | "review" | "test";
 export type ThemeMode = "light" | "dark";
+export type LearnQueueMode = "balanced" | "new_only" | "hard_only";
+
+export type StudyQueueOptions = {
+  learnMode?: LearnQueueMode;
+  activeLimit?: number;
+  newLimit?: number;
+  reviewLimit?: number;
+};
+
+export type LessonSummary = {
+  id: string;
+  title: string;
+  count: number;
+  newCount: number;
+  learningCount: number;
+  reviewCount: number;
+  masteredCount: number;
+  progressPercent: number;
+};
 
 export type StageProgress = {
   hanzi_to_translation: number;
@@ -33,6 +52,8 @@ export type FsrsCardSnapshot = {
 
 export type Card = {
   id: string;
+  lessonId: string;
+  lessonTitle: string;
   hanzi: string;
   pinyin: string;
   translation: string;

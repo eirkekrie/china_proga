@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
@@ -7,16 +7,18 @@ import { HanziWritingPractice } from "@/components/hanzi-writing-practice";
 import { useStudy } from "@/context/study-context";
 import { cardAudioEngine } from "@/lib/audio";
 import {
+  ALL_LESSONS_ID,
   LEARN_ROTATION_WINDOW,
   REVIEW_GRADE_LABELS,
   REVIEW_ROTATION_WINDOW,
   STAGE_HINTS,
   STAGE_LABELS,
   STAGE_PROMPTS,
+  UNASSIGNED_LESSON_ID,
 } from "@/lib/constants";
 import { pickCardFromQueue } from "@/lib/learning";
 import { formatDuration, formatRelativeDue } from "@/lib/utils";
-import type { DerivedCard, ReviewGrade, StudyFlow } from "@/lib/types";
+import type { DerivedCard, LearnQueueMode, ReviewGrade, StudyFlow } from "@/lib/types";
 
 type StudySessionProps = {
   flow: Extract<StudyFlow, "learn" | "review">;
@@ -37,6 +39,23 @@ const buttonStyles: Record<ReviewGrade, string> = {
   again: "btn-danger",
   hard: "btn-secondary",
   good: "btn-primary",
+};
+const ADVANCE_DELAY_MS = 280;
+const NEW_WORD_LIMIT_OPTIONS = [0, 2, 5, 10] as const;
+const ACTIVE_WINDOW_OPTIONS = [6, 8, 12] as const;
+
+const learnModeOptions: Array<{ id: LearnQueueMode; label: string }> = [
+  { id: "balanced", label: "Новые + повтор" },
+  { id: "new_only", label: "Только новые" },
+  { id: "hard_only", label: "Сложные" },
+];
+
+type StudyHistoryEntry = {
+  id: string;
+  hanzi: string;
+  translation: string;
+  grade: ReviewGrade | "skip";
+  lessonTitle: string | null;
 };
 
 function getPrompt(card: DerivedCard) {
@@ -66,10 +85,46 @@ function hasHintUsed(hints: HintFlags) {
   return hints.pinyin || hints.audio;
 }
 
+function getVisibleLessonTitle(card: DerivedCard) {
+  return card.lessonId === UNASSIGNED_LESSON_ID ? null : card.lessonTitle;
+}
+
 export function StudySession({ flow, title, description }: StudySessionProps) {
-  const { addStudyTime, answerCard, getQueue, hydrated, metrics, stats } = useStudy();
-  const queue = getQueue(flow);
-  const recentWindowSize = flow === "review" ? 4 : 6;
+  const {
+    addStudyTime,
+    answerCard,
+    availableLessons,
+    getQueue,
+    hydrated,
+    metrics,
+    resetLessonProgress,
+    selectedLessonId,
+    stats,
+  } = useStudy();
+  const [newWordsPerSession, setNewWordsPerSession] = useState<(typeof NEW_WORD_LIMIT_OPTIONS)[number]>(5);
+  const [activeWindowSize, setActiveWindowSize] = useState<(typeof ACTIVE_WINDOW_OPTIONS)[number]>(12);
+  const [learnMode, setLearnMode] = useState<LearnQueueMode>("balanced");
+  const [introducedNewIds, setIntroducedNewIds] = useState<string[]>([]);
+  const [postponedIds, setPostponedIds] = useState<string[]>([]);
+  const [history, setHistory] = useState<StudyHistoryEntry[]>([]);
+  const selectedLessonTitle =
+    selectedLessonId === ALL_LESSONS_ID
+      ? "всех уроков"
+      : availableLessons.find((lesson) => lesson.id === selectedLessonId)?.title ?? "урока";
+  const remainingNewSlots = Math.max(0, newWordsPerSession - introducedNewIds.length);
+  const queueNewLimit = newWordsPerSession === 0 ? 0 : Math.max(remainingNewSlots, 1);
+  const queueOptions =
+    flow === "learn"
+      ? {
+          activeLimit: activeWindowSize,
+          learnMode,
+          newLimit: queueNewLimit,
+          reviewLimit: Math.max(0, activeWindowSize - remainingNewSlots),
+        }
+      : undefined;
+  const baseQueue = getQueue(flow, undefined, queueOptions);
+  const queue = baseQueue.filter((card) => !postponedIds.includes(card.id));
+  const recentWindowSize = flow === "review" ? REVIEW_ROTATION_WINDOW : LEARN_ROTATION_WINDOW;
   const rotationWindowSize = flow === "review" ? REVIEW_ROTATION_WINDOW : LEARN_ROTATION_WINDOW;
 
   const [currentCardId, setCurrentCardId] = useState<string | null>(null);
@@ -82,12 +137,32 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
   const [audioSource, setAudioSource] = useState<keyof typeof AUDIO_SOURCE_LABELS | null>(null);
   const [hintFlags, setHintFlags] = useState<HintFlags>({ pinyin: false, audio: false });
   const [showHandwritingPad, setShowHandwritingPad] = useState(false);
+  const [isAdvancing, setIsAdvancing] = useState(false);
+  const [presentationTick, setPresentationTick] = useState(0);
   const startedAtRef = useRef(0);
   const addStudyTimeRef = useRef(addStudyTime);
+  const advanceTimerRef = useRef<number | null>(null);
+  const queueRef = useRef(queue);
+  const cooldownIdsRef = useRef(cooldownIds);
+  const rotationIndexRef = useRef(rotationIndex);
+  const rotationWindowSizeRef = useRef(rotationWindowSize);
+
+  queueRef.current = queue;
+  cooldownIdsRef.current = cooldownIds;
+  rotationIndexRef.current = rotationIndex;
+  rotationWindowSizeRef.current = rotationWindowSize;
 
   const currentCard =
     queue.find((card) => card.id === currentCardId) ??
     pickCardFromQueue(queue, cooldownIds, rotationIndex, rotationWindowSize);
+
+  useEffect(() => {
+    setCurrentCardId(null);
+    setCooldownIds([]);
+    setPostponedIds([]);
+    setIntroducedNewIds([]);
+    setRotationIndex(0);
+  }, [activeWindowSize, flow, learnMode, newWordsPerSession, selectedLessonId]);
 
   useEffect(() => {
     if (!currentCardId && currentCard) {
@@ -102,6 +177,16 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
   }, [cooldownIds, currentCard, currentCardId, queue, rotationIndex, rotationWindowSize]);
 
   useEffect(() => {
+    if (flow !== "learn" || !currentCard || currentCard.status !== "new") {
+      return;
+    }
+
+    setIntroducedNewIds((previous) =>
+      previous.includes(currentCard.id) ? previous : [...previous, currentCard.id],
+    );
+  }, [currentCard?.id, currentCard?.status, flow]);
+
+  useEffect(() => {
     if (!currentCard) {
       return;
     }
@@ -114,7 +199,8 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
     setAudioSource(null);
     setHintFlags({ pinyin: false, audio: false });
     setShowHandwritingPad(false);
-  }, [currentCard?.id]);
+    setIsAdvancing(false);
+  }, [currentCard?.id, presentationTick]);
 
   useEffect(() => {
     addStudyTimeRef.current = addStudyTime;
@@ -128,6 +214,14 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
     }, 1000);
 
     return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (advanceTimerRef.current !== null) {
+        window.clearTimeout(advanceTimerRef.current);
+      }
+    };
   }, []);
 
   function markHintUsed(kind: keyof HintFlags) {
@@ -172,24 +266,93 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
     );
   }
 
+  function recordHistory(card: DerivedCard, grade: StudyHistoryEntry["grade"]) {
+    setHistory((previous) =>
+      [
+        {
+          id: `${card.id}-${Date.now()}`,
+          hanzi: card.hanzi,
+          translation: card.translation,
+          lessonTitle: getVisibleLessonTitle(card),
+          grade,
+        },
+        ...previous,
+      ].slice(0, 10),
+    );
+  }
+
   function handleGrade(grade: ReviewGrade) {
-    if (!currentCard) {
+    if (!currentCard || isAdvancing) {
       return;
     }
 
     const responseTimeMs = Math.max(800, Math.round(performance.now() - startedAtRef.current));
     const effectiveGrade = hasHintUsed(hintFlags) && grade === "good" ? "hard" : grade;
 
+    setIsAdvancing(true);
     answerCard(currentCard.id, effectiveGrade, responseTimeMs);
+    recordHistory(currentCard, effectiveGrade);
     setFlashGrade(effectiveGrade);
     setRotationIndex((previous) => previous + 1);
     setCooldownIds((previous) =>
       [...previous.filter((id) => id !== currentCard.id), currentCard.id].slice(-recentWindowSize),
     );
 
-    window.setTimeout(() => {
-      setCurrentCardId(null);
-    }, 280);
+    if (advanceTimerRef.current !== null) {
+      window.clearTimeout(advanceTimerRef.current);
+    }
+
+    advanceTimerRef.current = window.setTimeout(() => {
+      advanceTimerRef.current = null;
+      const nextCard = pickCardFromQueue(
+        queueRef.current,
+        cooldownIdsRef.current,
+        rotationIndexRef.current,
+        rotationWindowSizeRef.current,
+      );
+
+      setCurrentCardId(nextCard?.id ?? null);
+      setPresentationTick((value) => value + 1);
+    }, ADVANCE_DELAY_MS);
+  }
+
+  function handlePostpone() {
+    if (!currentCard || isAdvancing) {
+      return;
+    }
+
+    recordHistory(currentCard, "skip");
+    setPostponedIds((previous) =>
+      previous.includes(currentCard.id) ? previous : [...previous, currentCard.id],
+    );
+    setCooldownIds((previous) =>
+      [...previous.filter((id) => id !== currentCard.id), currentCard.id].slice(-recentWindowSize),
+    );
+    setCurrentCardId(null);
+    setPresentationTick((value) => value + 1);
+  }
+
+  function handleResetProgress() {
+    if (!hydrated) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Сбросить прогресс ${selectedLessonTitle}? Карточки останутся в уроке.`);
+    if (!confirmed) {
+      return;
+    }
+
+    const resetCount = resetLessonProgress(selectedLessonId);
+    setCurrentCardId(null);
+    setCooldownIds([]);
+    setPostponedIds([]);
+    setIntroducedNewIds([]);
+    setHistory([]);
+    setPresentationTick((value) => value + 1);
+
+    if (resetCount > 0) {
+      setAudioNotice(`Сброшено карточек: ${resetCount}.`);
+    }
   }
 
   if (!hydrated) {
@@ -197,16 +360,32 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
   }
 
   if (!currentCard) {
+    const onlyPostponedCardsLeft = baseQueue.length > 0 && queue.length === 0 && postponedIds.length > 0;
     return (
       <section className="glass-panel p-8 sm:p-10">
         <div className="flex flex-col gap-4">
-          <span className="pill w-fit">Очередь пуста</span>
+          <span className="pill w-fit">
+            {onlyPostponedCardsLeft ? "Все карточки отложены" : "Очередь пуста"}
+          </span>
           <h1 className="text-3xl font-semibold tracking-[-0.04em]">{title}</h1>
           <p className="max-w-2xl muted-text">
-            На сегодня нет карточек для этого режима. Можно открыть тест, посмотреть все карточки или импортировать
-            новый набор слов.
+            {onlyPostponedCardsLeft
+              ? "В текущей сессии остались только отложенные карточки. Можно вернуть их в очередь или перейти к другому режиму."
+              : "На сегодня нет карточек для этого режима. Можно открыть тест, посмотреть все карточки или импортировать новый набор слов."}
           </p>
           <div className="flex flex-wrap gap-3">
+            {onlyPostponedCardsLeft ? (
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => {
+                  setPostponedIds([]);
+                  setCurrentCardId(null);
+                }}
+              >
+                Вернуть отложенные
+              </button>
+            ) : null}
             <Link href="/" className="btn-primary">
               На главную
             </Link>
@@ -223,6 +402,7 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
   }
 
   const prompt = getPrompt(currentCard);
+  const visibleLessonTitle = getVisibleLessonTitle(currentCard);
   const isHanziRecallStage = currentCard.currentStage === "translation_to_hanzi";
   const hintUsed = hasHintUsed(hintFlags);
   const cardClass =
@@ -241,6 +421,79 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
           <span className="pill w-fit">{flow === "review" ? "Повторение" : "Обучение"}</span>
           <h1 className="text-3xl font-semibold tracking-[-0.05em]">{title}</h1>
           <p className="max-w-3xl text-sm muted-text">{description}</p>
+          {flow === "learn" ? (
+            <div className="grid gap-3 text-sm md:grid-cols-3">
+              <div className="rounded-[22px] border border-white/10 bg-white/5 p-4">
+                <p className="font-semibold">Новых за сессию</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {NEW_WORD_LIMIT_OPTIONS.map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={newWordsPerSession === value ? "btn-secondary px-3 py-2 text-sm" : "btn-ghost px-3 py-2 text-sm"}
+                      onClick={() => setNewWordsPerSession(value)}
+                    >
+                      {value}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="rounded-[22px] border border-white/10 bg-white/5 p-4">
+                <p className="font-semibold">Активный круг</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {ACTIVE_WINDOW_OPTIONS.map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={activeWindowSize === value ? "btn-secondary px-3 py-2 text-sm" : "btn-ghost px-3 py-2 text-sm"}
+                      onClick={() => setActiveWindowSize(value)}
+                    >
+                      {value}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="rounded-[22px] border border-white/10 bg-white/5 p-4">
+                <p className="font-semibold">Режим</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {learnModeOptions.map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      className={learnMode === option.id ? "btn-secondary px-3 py-2 text-sm" : "btn-ghost px-3 py-2 text-sm"}
+                      onClick={() => setLearnMode(option.id)}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="md:col-span-3 flex flex-wrap items-center gap-3">
+              <span className="pill">
+                В очереди
+                <strong>{queue.length}</strong>
+              </span>
+              <span className="pill">
+                Новых осталось
+                <strong>{remainingNewSlots}</strong>
+              </span>
+              <span className="pill">
+                Отложено
+                <strong>{postponedIds.length}</strong>
+              </span>
+              {postponedIds.length > 0 ? (
+                <button type="button" className="btn-ghost px-4 py-2 text-sm" onClick={() => setPostponedIds([])}>
+                  Вернуть отложенные
+                </button>
+              ) : null}
+              {selectedLessonId !== ALL_LESSONS_ID ? (
+                <button type="button" className="btn-danger px-4 py-2 text-sm" onClick={handleResetProgress}>
+                  Сбросить прогресс {selectedLessonTitle}
+                </button>
+              ) : null}
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3">
@@ -266,7 +519,10 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
               <div className="flex h-full flex-col gap-6">
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-3">
-                    <span className="pill">{STAGE_LABELS[currentCard.currentStage]}</span>
+                    <div className="flex flex-wrap gap-2">
+                      {visibleLessonTitle ? <span className="pill">{visibleLessonTitle}</span> : null}
+                      <span className="pill">{STAGE_LABELS[currentCard.currentStage]}</span>
+                    </div>
                     <div>
                       <p className="text-xs uppercase tracking-[0.18em] subtle-text">Вопрос</p>
                       <p className="mt-2 text-lg font-medium">{prompt.question}</p>
@@ -337,6 +593,14 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
                   >
                     Показать ответ
                   </button>
+                  <button
+                    type="button"
+                    className="btn-ghost w-full max-w-xl px-6 py-3 text-sm"
+                    disabled={isAdvancing}
+                    onClick={handlePostpone}
+                  >
+                    Отложить карточку
+                  </button>
 
                   {showPinyinHint ? (
                     <div className="rounded-[24px] border border-white/10 bg-white/5 px-5 py-4">
@@ -398,7 +662,10 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
               <div className="flex h-full flex-col justify-between gap-6">
                 <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
                   <div>
-                    <span className="pill mb-4">{STAGE_LABELS[currentCard.currentStage]}</span>
+                    <div className="mb-4 flex flex-wrap gap-2">
+                      {visibleLessonTitle ? <span className="pill">{visibleLessonTitle}</span> : null}
+                      <span className="pill">{STAGE_LABELS[currentCard.currentStage]}</span>
+                    </div>
                     <p className="text-xs uppercase tracking-[0.18em] subtle-text">Правильный ответ</p>
                     <p className="mt-3 text-3xl font-semibold tracking-[-0.04em]">{prompt.answer}</p>
                     <p className="mt-2 text-xs uppercase tracking-[0.16em] subtle-text">Предзаписанный wav-файл</p>
@@ -456,9 +723,18 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
                   {audioNotice ? <p className="text-sm text-[rgb(var(--accent))]">{audioNotice}</p> : null}
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-4">
+                  <button type="button" className="btn-ghost" disabled={isAdvancing} onClick={handlePostpone}>
+                    Отложить
+                  </button>
                   {(["again", "hard", "good"] as ReviewGrade[]).map((grade) => (
-                    <button key={grade} type="button" className={buttonStyles[grade]} onClick={() => handleGrade(grade)}>
+                    <button
+                      key={grade}
+                      type="button"
+                      className={buttonStyles[grade]}
+                      disabled={isAdvancing}
+                      onClick={() => handleGrade(grade)}
+                    >
                       {REVIEW_GRADE_LABELS[grade]}
                     </button>
                   ))}
@@ -472,9 +748,24 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
           <div className="glass-panel p-5">
             <p className="text-sm font-semibold">Память карточки</p>
             <div className="mt-4 space-y-4 text-sm">
+              {visibleLessonTitle ? (
+                <div className="flex items-center justify-between">
+                  <span className="muted-text">Урок</span>
+                  <strong>{visibleLessonTitle}</strong>
+                </div>
+              ) : null}
               <div>
                 <div className="mb-2 flex items-center justify-between">
-                  <span className="muted-text">Память</span>
+                  <span className="muted-text">Прогресс</span>
+                  <span>{currentCard.overallProgressPercent}%</span>
+                </div>
+                <div className="progress-track h-3">
+                  <div className="meter-bar h-full" style={{ width: `${currentCard.overallProgressPercent}%` }} />
+                </div>
+              </div>
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="muted-text">Память FSRS</span>
                   <span>{Math.round(currentCard.effectiveMemoryStrength)}%</span>
                 </div>
                 <div className="progress-track h-3">
@@ -496,6 +787,30 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
                 <span className="muted-text">Время на карточку</span>
                 <strong>{formatDuration(currentCard.totalTimeSpent)}</strong>
               </div>
+            </div>
+          </div>
+
+          <div className="glass-panel p-5">
+            <p className="text-sm font-semibold">Последние ответы</p>
+            <div className="mt-4 space-y-2 text-sm">
+              {history.length > 0 ? (
+                history.map((entry) => (
+                  <div key={entry.id} className="rounded-[16px] border border-[rgba(var(--border),0.38)] bg-[rgba(var(--panel),0.34)] p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="display-hanzi text-xl font-semibold">{entry.hanzi}</p>
+                        <p className="muted-text">{entry.translation}</p>
+                      </div>
+                      <span className="pill">
+                        {entry.grade === "skip" ? "Отложено" : REVIEW_GRADE_LABELS[entry.grade]}
+                      </span>
+                    </div>
+                    {entry.lessonTitle ? <p className="mt-2 text-xs subtle-text">{entry.lessonTitle}</p> : null}
+                  </div>
+                ))
+              ) : (
+                <p className="muted-text">Пока нет ответов в этой сессии.</p>
+              )}
             </div>
           </div>
 

@@ -1,6 +1,9 @@
 ﻿import type { CardStatus, LearningStage, ReviewGrade } from "@/lib/types";
 
 export const STORAGE_KEY = "hanzi-study-state-v1";
+export const ALL_LESSONS_ID = "all";
+export const UNASSIGNED_LESSON_ID = "unassigned";
+export const UNASSIGNED_LESSON_TITLE = "Без урока";
 
 export const STAGE_LABELS: Record<LearningStage, string> = {
   hanzi_to_translation: "Stage 1 · Иероглиф → перевод",
@@ -33,9 +36,9 @@ export const STAGE_SUCCESS_THRESHOLD: Record<LearningStage, number> = {
 };
 
 export const STAGE_REQUIRED_STREAK: Record<LearningStage, number> = {
-  hanzi_to_translation: 3,
-  translation_to_hanzi: 3,
-  hanzi_to_pinyin: 4,
+  hanzi_to_translation: 2,
+  translation_to_hanzi: 2,
+  hanzi_to_pinyin: 3,
 };
 
 export const STAGE_BASE_INTERVAL_DAYS: Record<LearningStage, number> = {
@@ -44,10 +47,11 @@ export const STAGE_BASE_INTERVAL_DAYS: Record<LearningStage, number> = {
   hanzi_to_pinyin: 1.8,
 };
 
-export const MAX_ACTIVE_LEARNING_CARDS = 3;
-export const MAX_NEW_CARDS_IN_LEARN_QUEUE = 1;
-export const LEARN_ROTATION_WINDOW = 5;
-export const REVIEW_ROTATION_WINDOW = 4;
+export const MAX_ACTIVE_LEARNING_CARDS = 8;
+export const MAX_NEW_CARDS_IN_LEARN_QUEUE = 2;
+export const MAX_REVIEW_CARDS_IN_LEARN_QUEUE = 6;
+export const LEARN_ROTATION_WINDOW = 10;
+export const REVIEW_ROTATION_WINDOW = 8;
 
 export const STATUS_LABELS: Record<CardStatus, string> = {
   new: "Новая",

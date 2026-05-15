@@ -1,10 +1,11 @@
 ﻿"use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { HanziHandwritingAnswer, type HandwritingAnswerState } from "@/components/hanzi-handwriting-answer";
 import { useStudy } from "@/context/study-context";
 import { cardAudioEngine } from "@/lib/audio";
-import { REVIEW_GRADE_LABELS, STAGE_LABELS, STAGE_SHORT_LABELS } from "@/lib/constants";
+import { STAGE_LABELS, STAGE_SHORT_LABELS, UNASSIGNED_LESSON_ID } from "@/lib/constants";
+import { getEffectiveCardState } from "@/lib/learning";
 import { compareAnswer, formatDuration, shuffleArray } from "@/lib/utils";
 import type { Card, DerivedCard, LearningStage, ReviewGrade, TestOption } from "@/lib/types";
 
@@ -17,6 +18,16 @@ const modes: LearningStage[] = [
 type HintFlags = {
   pinyin: boolean;
   audio: boolean;
+};
+
+type TestResultEntry = {
+  cardId: string;
+  hanzi: string;
+  pinyin: string;
+  translation: string;
+  expected: string;
+  isCorrect: boolean;
+  grade: ReviewGrade;
 };
 
 const AUDIO_SOURCE_LABELS = {
@@ -41,34 +52,55 @@ function hasHintUsed(hints: HintFlags) {
   return hints.pinyin || hints.audio;
 }
 
+function getVisibleLessonTitle(card: DerivedCard) {
+  return card.lessonId === UNASSIGNED_LESSON_ID ? null : card.lessonTitle;
+}
+
 export function TestSession() {
-  const { addStudyTime, answerCard, cards, getQueue, hydrated, stats } = useStudy();
+  const { addStudyTime, answerCard, filteredCards, hydrated, selectedLessonId, stats } = useStudy();
   const [mode, setMode] = useState<LearningStage>("hanzi_to_translation");
   const [translationAnswerMode, setTranslationAnswerMode] = useState<"choice" | "handwriting">("choice");
-  const queue = getQueue("test", mode);
+  const testCards = useMemo(
+    () =>
+      filteredCards
+        .map((card) => getEffectiveCardState(card))
+        .sort((left, right) => left.createdAt.localeCompare(right.createdAt)),
+    [filteredCards],
+  );
 
   const [currentCardId, setCurrentCardId] = useState<string | null>(null);
-  const [cooldownIds, setCooldownIds] = useState<string[]>([]);
+  const [completedIds, setCompletedIds] = useState<string[]>([]);
+  const [results, setResults] = useState<TestResultEntry[]>([]);
   const [choiceOptions, setChoiceOptions] = useState<TestOption[]>([]);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [textAnswer, setTextAnswer] = useState("");
   const [showPinyinHint, setShowPinyinHint] = useState(false);
   const [hintFlags, setHintFlags] = useState<HintFlags>({ pinyin: false, audio: false });
-  const [result, setResult] = useState<{ isCorrect: boolean; expected: string; grade: ReviewGrade } | null>(null);
+  const [result, setResult] = useState<TestResultEntry | null>(null);
   const [audioNotice, setAudioNotice] = useState<string | null>(null);
   const [audioSource, setAudioSource] = useState<keyof typeof AUDIO_SOURCE_LABELS | null>(null);
   const [handwritingState, setHandwritingState] = useState<HandwritingAnswerState | null>(null);
   const startedAtRef = useRef(0);
   const addStudyTimeRef = useRef(addStudyTime);
+  const completedIdSet = useMemo(() => new Set(completedIds), [completedIds]);
 
   const currentCard =
-    queue.find((card) => card.id === currentCardId) ??
-    queue.find((card) => !cooldownIds.includes(card.id)) ??
-    queue[0] ??
+    testCards.find((card) => card.id === currentCardId && !completedIdSet.has(card.id)) ??
+    testCards.find((card) => !completedIdSet.has(card.id)) ??
     null;
+  const totalQuestions = testCards.length;
+  const answeredCount = completedIds.length + (result ? 1 : 0);
+  const currentQuestionNumber = Math.min(totalQuestions, completedIds.length + 1);
+  const remainingCount = Math.max(0, totalQuestions - answeredCount);
+  const isTestComplete = totalQuestions > 0 && completedIds.length >= totalQuestions;
+  const finalCorrectCount = results.filter((entry) => entry.isCorrect).length;
+  const finalScorePercent = totalQuestions > 0 ? Math.round((finalCorrectCount / totalQuestions) * 100) : 0;
+  const wrongResults = results.filter((entry) => !entry.isCorrect);
 
   useEffect(() => {
     setCurrentCardId(null);
+    setCompletedIds([]);
+    setResults([]);
     setSelectedOption(null);
     setTextAnswer("");
     setShowPinyinHint(false);
@@ -81,7 +113,7 @@ export function TestSession() {
     if (mode !== "translation_to_hanzi") {
       setTranslationAnswerMode("choice");
     }
-  }, [mode]);
+  }, [mode, selectedLessonId]);
 
   useEffect(() => {
     if (!currentCardId && currentCard) {
@@ -89,11 +121,17 @@ export function TestSession() {
       return;
     }
 
-    if (currentCardId && !queue.some((card) => card.id === currentCardId)) {
-      const nextCard = queue.find((card) => !cooldownIds.includes(card.id)) ?? queue[0] ?? null;
+    if (currentCardId && !testCards.some((card) => card.id === currentCardId && !completedIdSet.has(card.id))) {
+      const nextCard = testCards.find((card) => !completedIdSet.has(card.id)) ?? null;
       setCurrentCardId(nextCard?.id ?? null);
     }
-  }, [cooldownIds, currentCard, currentCardId, queue]);
+  }, [completedIdSet, currentCard, currentCardId, testCards]);
+
+  useEffect(() => {
+    const availableIds = new Set(testCards.map((card) => card.id));
+    setCompletedIds((previous) => previous.filter((id) => availableIds.has(id)));
+    setResults((previous) => previous.filter((entry) => availableIds.has(entry.cardId)));
+  }, [testCards]);
 
   useEffect(() => {
     if (!currentCard) {
@@ -127,8 +165,8 @@ export function TestSession() {
       return;
     }
 
-    setChoiceOptions(buildOptions(cards, currentCard, mode));
-  }, [cards, currentCard?.id, mode]);
+    setChoiceOptions(buildOptions(filteredCards, currentCard, mode));
+  }, [filteredCards, currentCard?.id, mode]);
 
   useEffect(() => {
     addStudyTimeRef.current = addStudyTime;
@@ -208,24 +246,109 @@ export function TestSession() {
     }
 
     answerCard(currentCard.id, grade, responseTimeMs);
+    const expected =
+      mode === "translation_to_hanzi"
+        ? currentCard.hanzi
+        : mode === "hanzi_to_translation"
+          ? currentCard.translation
+          : currentCard.pinyin;
     setResult({
+      cardId: currentCard.id,
+      hanzi: currentCard.hanzi,
+      pinyin: currentCard.pinyin,
+      translation: currentCard.translation,
       isCorrect,
-      expected: mode === "translation_to_hanzi" ? currentCard.hanzi : mode === "hanzi_to_translation" ? currentCard.translation : currentCard.pinyin,
+      expected,
       grade,
     });
   }
 
   function handleNext() {
-    if (!currentCard) {
+    if (!currentCard || !result) {
       return;
     }
 
-    setCooldownIds((previous) => [...previous.filter((id) => id !== currentCard.id), currentCard.id].slice(-2));
+    setResults((previous) =>
+      previous.some((entry) => entry.cardId === result.cardId) ? previous : [...previous, result],
+    );
+    setCompletedIds((previous) =>
+      previous.includes(currentCard.id) ? previous : [...previous, currentCard.id],
+    );
+    const nextCard = testCards.find((card) => card.id !== currentCard.id && !completedIdSet.has(card.id)) ?? null;
+    setResult(null);
+    setCurrentCardId(nextCard?.id ?? null);
+  }
+
+  function restartTest() {
     setCurrentCardId(null);
+    setCompletedIds([]);
+    setResults([]);
+    setSelectedOption(null);
+    setTextAnswer("");
+    setShowPinyinHint(false);
+    setHintFlags({ pinyin: false, audio: false });
+    setResult(null);
+    setAudioNotice(null);
+    setAudioSource(null);
+    setHandwritingState(null);
   }
 
   if (!hydrated) {
     return <div className="glass-panel p-8 text-sm muted-text">Загружаю тестовые данные…</div>;
+  }
+
+  if (isTestComplete) {
+    return (
+      <div className="grid gap-6">
+        <section className="glass-panel grid gap-5 p-8 sm:grid-cols-[1fr_auto] sm:items-center">
+          <div>
+            <span className="pill mb-4">Тест завершён</span>
+            <h1 className="text-3xl font-semibold tracking-[-0.04em]">Итоговый результат</h1>
+            <p className="mt-3 max-w-2xl muted-text">
+              Пройдено {totalQuestions} из {totalQuestions} карточек в выбранном уроке.
+            </p>
+          </div>
+          <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 text-center">
+            <p className="subtle-text text-xs uppercase tracking-[0.16em]">Правильно</p>
+            <p className="mt-2 text-4xl font-semibold">
+              {finalCorrectCount}/{totalQuestions}
+            </p>
+            <p className="mt-2 text-sm muted-text">{finalScorePercent}%</p>
+          </div>
+        </section>
+
+        <section className="glass-panel p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-lg font-semibold">Ошибки</p>
+              <p className="mt-1 text-sm muted-text">
+                {wrongResults.length > 0 ? `Нужно повторить: ${wrongResults.length}` : "Ошибок нет."}
+              </p>
+            </div>
+            <button type="button" className="btn-primary" onClick={restartTest}>
+              Пройти тест ещё раз
+            </button>
+          </div>
+
+          {wrongResults.length > 0 ? (
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              {wrongResults.slice(0, 8).map((entry) => (
+                <div key={entry.cardId} className="rounded-[20px] border border-white/10 bg-white/5 p-4">
+                  <p className="display-hanzi text-3xl font-semibold">{entry.hanzi}</p>
+                  <p className="mt-2 font-medium">{entry.pinyin}</p>
+                  <p className="mt-1 muted-text">{entry.translation}</p>
+                  <p className="mt-3 text-sm muted-text">Правильный ответ: {entry.expected}</p>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {wrongResults.length > 8 ? (
+            <p className="mt-4 text-sm muted-text">Ещё ошибок: {wrongResults.length - 8}.</p>
+          ) : null}
+        </section>
+      </div>
+    );
   }
 
   if (!currentCard) {
@@ -233,8 +356,7 @@ export function TestSession() {
       <section className="glass-panel p-8">
         <h1 className="text-3xl font-semibold tracking-[-0.04em]">Тест</h1>
         <p className="mt-3 max-w-2xl muted-text">
-          Недостаточно карточек, которые дошли до выбранного режима. Сначала пройдите этапы обучения или импортируйте
-          больше слов.
+          В выбранном уроке пока нет карточек для теста. Выберите другой урок или импортируйте больше слов.
         </p>
       </section>
     );
@@ -243,6 +365,7 @@ export function TestSession() {
   const promptLead = mode === "translation_to_hanzi" ? currentCard.translation : currentCard.hanzi;
   const isHandwritingMode = mode === "translation_to_hanzi" && translationAnswerMode === "handwriting";
   const hintUsed = hasHintUsed(hintFlags);
+  const visibleLessonTitle = getVisibleLessonTitle(currentCard);
   const placeholder = "Введите пиньинь";
   const supportLine = mode === "hanzi_to_pinyin" ? currentCard.translation : null;
 
@@ -256,9 +379,17 @@ export function TestSession() {
             Отдельный режим для проверки смысла, обратного вспоминания и пиньиня без блока произношения.
           </p>
         </div>
-        <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 text-sm">
-          <p className="muted-text">Сессия</p>
-          <p className="mt-2 text-2xl font-semibold">{formatDuration(stats.sessionStudyTime)}</p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 text-sm">
+            <p className="muted-text">Вопрос</p>
+            <p className="mt-2 text-2xl font-semibold">
+              {currentQuestionNumber}/{totalQuestions}
+            </p>
+          </div>
+          <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 text-sm">
+            <p className="muted-text">Сессия</p>
+            <p className="mt-2 text-2xl font-semibold">{formatDuration(stats.sessionStudyTime)}</p>
+          </div>
         </div>
       </section>
 
@@ -292,7 +423,12 @@ export function TestSession() {
           <div className="flex flex-col gap-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <span className="pill">{STAGE_LABELS[mode]}</span>
+                <div className="flex flex-wrap gap-2">
+                  <span className="pill">{STAGE_LABELS[mode]}</span>
+                  <span className="pill">
+                    Пройдено {answeredCount}/{totalQuestions}
+                  </span>
+                </div>
                 <p className="mt-4 text-sm uppercase tracking-[0.18em] subtle-text">Задание</p>
                 <p className="mt-2 text-2xl font-semibold tracking-[-0.04em]">
                   {mode === "translation_to_hanzi"
@@ -431,7 +567,7 @@ export function TestSession() {
                   </div>
                 ) : null}
                 <button type="button" className="btn-primary mt-4" onClick={handleNext}>
-                  Следующая карточка
+                  {answeredCount >= totalQuestions ? "Показать итог" : "Следующая карточка"}
                 </button>
               </div>
             ) : (
@@ -460,6 +596,18 @@ export function TestSession() {
             <p className="text-sm font-semibold">Контекст карточки</p>
             <div className="mt-4 space-y-3 text-sm">
               <div className="flex items-center justify-between">
+                <span className="muted-text">Вопрос</span>
+                <strong>
+                  {currentQuestionNumber} из {totalQuestions}
+                </strong>
+              </div>
+              {visibleLessonTitle ? (
+                <div className="flex items-center justify-between">
+                  <span className="muted-text">Урок</span>
+                  <strong>{visibleLessonTitle}</strong>
+                </div>
+              ) : null}
+              <div className="flex items-center justify-between">
                 <span className="muted-text">Этап</span>
                 <strong>{STAGE_SHORT_LABELS[currentCard.currentStage]}</strong>
               </div>
@@ -468,17 +616,17 @@ export function TestSession() {
                 <strong>{currentCard.mistakes}</strong>
               </div>
               <div className="flex items-center justify-between">
-                <span className="muted-text">Забывание</span>
-                <strong>{Math.round(currentCard.effectiveForgettingScore)}%</strong>
+                <span className="muted-text">Осталось</span>
+                <strong>{remainingCount}</strong>
               </div>
             </div>
           </div>
 
           <div className="glass-panel p-5 text-sm muted-text">
             <p className="font-semibold text-[rgb(var(--foreground))]">Логика режима</p>
-            <p className="mt-3">Тест использует реальные этапы карточек и обновляет память так же, как обучение.</p>
-            <p className="mt-3">Если ответ быстрый и точный, растёт память карточки и сдвигается следующая дата повтора.</p>
-            <p className="mt-3">При ошибке карточка снова попадает в повторение, а подсказки ограничивают оценку уровнем «Трудно».</p>
+            <p className="mt-3">Тест проходит все карточки выбранного урока по одному разу.</p>
+            <p className="mt-3">После последнего вопроса показывается итог: сколько ответов верные и какие слова ошибочные.</p>
+            <p className="mt-3">Ответы всё ещё обновляют память карточек, а подсказки ограничивают оценку уровнем «Трудно».</p>
           </div>
         </aside>
       </section>

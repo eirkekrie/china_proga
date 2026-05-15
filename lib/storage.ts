@@ -6,7 +6,7 @@
   deriveFsrsMemoryStrength,
   ensureFsrsSnapshot,
 } from "@/lib/fsrs";
-import { STARTER_CARD_LINES, STORAGE_KEY } from "@/lib/constants";
+import { STARTER_CARD_LINES, STORAGE_KEY, UNASSIGNED_LESSON_ID, UNASSIGNED_LESSON_TITLE } from "@/lib/constants";
 import { parseCardLines } from "@/lib/parser";
 import type { Card, StudyStats, ThemeMode } from "@/lib/types";
 
@@ -33,6 +33,14 @@ export function createDefaultStats(): StudyStats {
 export function sanitizeCard(raw: Partial<Card> & { currentStage?: string }): Card {
   const now = new Date();
   const rawStage = typeof raw.currentStage === "string" ? (raw.currentStage as string) : "";
+  const lessonId =
+    typeof raw.lessonId === "string" && raw.lessonId.trim() ? raw.lessonId.trim() : UNASSIGNED_LESSON_ID;
+  const lessonTitle =
+    typeof raw.lessonTitle === "string" && raw.lessonTitle.trim()
+      ? raw.lessonTitle.trim()
+      : lessonId === UNASSIGNED_LESSON_ID
+        ? UNASSIGNED_LESSON_TITLE
+        : lessonId;
   const stageProgress = {
     hanzi_to_translation: raw.stageProgress?.hanzi_to_translation ?? 0,
     translation_to_hanzi: raw.stageProgress?.translation_to_hanzi ?? 0,
@@ -69,6 +77,8 @@ export function sanitizeCard(raw: Partial<Card> & { currentStage?: string }): Ca
 
   return {
     id: raw.id ?? `card-${Date.now().toString(36)}`,
+    lessonId,
+    lessonTitle,
     hanzi: raw.hanzi ?? "",
     pinyin: raw.pinyin ?? "",
     translation: raw.translation ?? "",

@@ -94,6 +94,10 @@ export function extractHanziCharacters(value: string) {
   return [...value].filter((char) => /\p{Script=Han}/u.test(char));
 }
 
+export function formatCardCopyText(card: Pick<Card, "hanzi" | "pinyin" | "translation">) {
+  return [card.hanzi.trim(), card.pinyin.trim(), card.translation.trim()].filter(Boolean).join("\n");
+}
+
 export function buildCardKey(card: Pick<Card, "hanzi" | "pinyin" | "translation">) {
   return `${normalizeText(card.hanzi)}|${normalizePinyin(card.pinyin)}|${normalizeText(card.translation)}`;
 }

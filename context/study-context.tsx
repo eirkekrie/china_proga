@@ -51,6 +51,8 @@ type StudyContextValue = {
 export type CardLessonPatch = Pick<Card, "lessonId" | "lessonTitle">;
 export type CardManagementPatch = Partial<Pick<Card, "hanzi" | "pinyin" | "translation">> & Partial<CardLessonPatch>;
 
+const SERVER_STATE_ENABLED = process.env.NEXT_PUBLIC_DISABLE_SERVER_STATE !== "1";
+
 const StudyContext = createContext<StudyContextValue | null>(null);
 
 function getLessonNumber(title: string) {
@@ -202,6 +204,16 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     const cached = loadPersistedState();
 
     async function hydrate() {
+      if (!SERVER_STATE_ENABLED) {
+        persistedJsonRef.current = JSON.stringify(cached);
+        setState({
+          ...cached,
+          stats: normalizeStatsForToday(cached.stats, new Date()),
+        });
+        setHydrated(true);
+        return;
+      }
+
       try {
         const response = await fetch("/api/state", {
           method: "GET",
@@ -259,6 +271,10 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     }
 
     persistedJsonRef.current = serialized;
+
+    if (!SERVER_STATE_ENABLED) {
+      return;
+    }
 
     void fetch("/api/state", {
       method: "PUT",

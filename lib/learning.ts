@@ -1,10 +1,12 @@
 ﻿import {
   MAX_ACTIVE_LEARNING_CARDS,
   MAX_NEW_CARDS_IN_LEARN_QUEUE,
+  MAX_REVIEW_CARDS_IN_LEARN_QUEUE,
   STAGE_REQUIRED_STREAK,
   STAGE_SUCCESS_THRESHOLD,
 } from "@/lib/constants";
 import {
+  createInitialFsrsSnapshot,
   deriveFsrsEaseFactor,
   deriveFsrsForgettingScore,
   deriveFsrsInterval,
@@ -21,12 +23,18 @@ import {
   type LearningStage,
   type ReviewGrade,
   type StudyFlow,
+  type StudyQueueOptions,
   type StudyStats,
 } from "@/lib/types";
 import { clamp, diffInDays } from "@/lib/utils";
 
 const DAY_MS = 1000 * 60 * 60 * 24;
 const coreLearningStages: LearningStage[] = ["hanzi_to_translation", "translation_to_hanzi"];
+const reviewProgressDelta: Record<ReviewGrade, number> = {
+  again: -22,
+  hard: 25,
+  good: 50,
+};
 
 const overdueRank: Record<DerivedCard["overdueLevel"], number> = {
   fresh: 1,
@@ -34,6 +42,16 @@ const overdueRank: Record<DerivedCard["overdueLevel"], number> = {
   due: 3,
   critical: 4,
 };
+
+function isHardPracticeCard(card: DerivedCard) {
+  return (
+    card.mistakes > 0 ||
+    card.effectiveForgettingScore >= 45 ||
+    card.computedStatus === "review" ||
+    card.overdueLevel === "due" ||
+    card.overdueLevel === "critical"
+  );
+}
 
 export function getStageIndex(stage: LearningStage) {
   return learningStages.indexOf(stage);
@@ -157,7 +175,10 @@ export function pickCardFromQueue(
   }
 
   const eligibleCards = queue.filter((card) => !recentIds.includes(card.id));
-  const sourceCards = eligibleCards.length > 0 ? eligibleCards : queue;
+  const lastRecentId = recentIds[recentIds.length - 1] ?? null;
+  const fallbackCards =
+    queue.length > 1 && lastRecentId ? queue.filter((card) => card.id !== lastRecentId) : queue;
+  const sourceCards = eligibleCards.length > 0 ? eligibleCards : fallbackCards;
   const poolSize = clamp(windowSize, 1, sourceCards.length);
   const rotationPool = sourceCards.slice(0, poolSize);
 
@@ -169,8 +190,13 @@ export function buildStudyQueue(
   flow: StudyFlow,
   now = new Date(),
   forcedStage?: LearningStage,
+  options: StudyQueueOptions = {},
 ) {
   const derivedCards = cards.map((card) => getEffectiveCardState(card, now));
+  const activeLimit = options.activeLimit ?? MAX_ACTIVE_LEARNING_CARDS;
+  const newLimit = options.newLimit ?? MAX_NEW_CARDS_IN_LEARN_QUEUE;
+  const reviewLimit = options.reviewLimit ?? MAX_REVIEW_CARDS_IN_LEARN_QUEUE;
+  const learnMode = options.learnMode ?? "balanced";
 
   if (flow === "review") {
     return derivedCards
@@ -198,14 +224,36 @@ export function buildStudyQueue(
       .sort(compareByUrgency);
   }
 
+  if (learnMode === "new_only") {
+    return derivedCards
+      .filter((card) => card.status === "new")
+      .sort((left, right) => {
+        if (left.repetitions !== right.repetitions) {
+          return left.repetitions - right.repetitions;
+        }
+
+        return left.createdAt.localeCompare(right.createdAt);
+      })
+      .slice(0, Math.max(0, Math.min(newLimit, activeLimit)));
+  }
+
+  if (learnMode === "hard_only") {
+    return derivedCards
+      .filter((card) => card.status !== "new" && isHardPracticeCard(card))
+      .sort(compareByUrgency)
+      .slice(0, activeLimit);
+  }
+
   const reviewCards = derivedCards
     .filter(
       (card) =>
         (card.status !== "mastered" || card.computedStatus === "review") &&
         (card.computedStatus === "review" || card.overdueLevel === "critical"),
     )
-    .sort(compareByUrgency);
+    .sort(compareByUrgency)
+    .slice(0, reviewLimit);
   const reviewIds = new Set(reviewCards.map((card) => card.id));
+  const activeLearningLimit = Math.max(0, activeLimit - reviewCards.length);
 
   const activeLearningCards = derivedCards
     .filter(
@@ -227,9 +275,10 @@ export function buildStudyQueue(
 
       return left.stageIndex - right.stageIndex;
     })
-    .slice(0, MAX_ACTIVE_LEARNING_CARDS);
+    .slice(0, activeLearningLimit);
 
-  const shouldIntroduceNewCards = activeLearningCards.length < MAX_ACTIVE_LEARNING_CARDS;
+  const newCardSlots = Math.max(0, activeLimit - reviewCards.length - activeLearningCards.length);
+  const shouldIntroduceNewCards = reviewCards.length === 0 && newCardSlots > 0;
   const newCards = shouldIntroduceNewCards
     ? derivedCards
         .filter((card) => !reviewIds.has(card.id) && card.status === "new")
@@ -240,7 +289,7 @@ export function buildStudyQueue(
 
           return left.createdAt.localeCompare(right.createdAt);
         })
-        .slice(0, MAX_NEW_CARDS_IN_LEARN_QUEUE)
+        .slice(0, Math.min(newLimit, newCardSlots))
     : [];
 
   return [...reviewCards, ...activeLearningCards, ...newCards];
@@ -252,7 +301,7 @@ export function applyReview(card: Card, grade: ReviewGrade, responseTimeMs: numb
   const stageProgress = { ...card.stageProgress };
 
   stageProgress[activeStage] = clamp(
-    stageProgress[activeStage] + { again: -26, hard: 18, good: 36 }[grade],
+    stageProgress[activeStage] + reviewProgressDelta[grade],
     0,
     100,
   );
@@ -333,6 +382,32 @@ export function applyReview(card: Card, grade: ReviewGrade, responseTimeMs: numb
     fsrs,
     totalTimeSpent,
     averageResponseTime,
+  };
+}
+
+export function resetCardProgress(card: Card, now = new Date()): Card {
+  return {
+    ...card,
+    status: "new",
+    currentStage: learningStages[0],
+    stageProgress: {
+      hanzi_to_translation: 0,
+      translation_to_hanzi: 0,
+      hanzi_to_pinyin: 0,
+    },
+    repetitions: 0,
+    mistakes: 0,
+    streakCorrect: 0,
+    easeFactor: 2.3,
+    interval: 0,
+    memoryStrength: 8,
+    forgettingScore: 12,
+    lastSeenAt: null,
+    lastCorrectAt: null,
+    nextReviewAt: null,
+    fsrs: createInitialFsrsSnapshot(now),
+    totalTimeSpent: 0,
+    averageResponseTime: 0,
   };
 }
 

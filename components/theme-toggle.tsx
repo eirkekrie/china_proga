@@ -7,7 +7,7 @@ export function ThemeToggle() {
 
   if (!hydrated) {
     return (
-      <button type="button" className="btn-secondary px-4 py-2 text-sm" disabled>
+      <button type="button" className="theme-toggle" disabled>
         Тема
       </button>
     );
@@ -16,10 +16,11 @@ export function ThemeToggle() {
   return (
     <button
       type="button"
-      className="btn-secondary px-4 py-2 text-sm"
+      className="theme-toggle"
       onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+      aria-label={theme === "dark" ? "Включить светлую тему" : "Включить тёмную тему"}
     >
-      {theme === "dark" ? "Светлая тема" : "Тёмная тема"}
+      {theme === "dark" ? "Светлая" : "Тёмная"}
     </button>
   );
 }

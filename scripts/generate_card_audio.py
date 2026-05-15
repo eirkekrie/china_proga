@@ -16,6 +16,7 @@ PUNCTUATION_PATTERN = re.compile(r"""[.,!?;:()\[\]{}\"'`]""")
 WHITESPACE_PATTERN = re.compile(r"\s+")
 BREAK_PATTERN = re.compile(r"<br\s*/?>", re.IGNORECASE)
 ASCII_SLUG_PATTERN = re.compile(r"[^a-z0-9]+")
+LESSON_HEADER_PATTERN = re.compile(r"^(?:urok|урок)\s+(.+?)\s*:?\s*$", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -50,6 +51,9 @@ def parse_card_lines(raw_text: str) -> tuple[list[ParsedCard], list[str], list[s
     seen_keys: set[str] = set()
 
     for line in lines:
+        if LESSON_HEADER_PATTERN.match(line):
+            continue
+
         split_by_break = BREAK_PATTERN.split(line)
         if len(split_by_break) != 2:
             invalid_lines.append(line)
