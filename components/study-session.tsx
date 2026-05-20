@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { CopyButton } from "@/components/copy-button";
 import { HanziHandwritingAnswer } from "@/components/hanzi-handwriting-answer";
 import { HanziWritingPractice } from "@/components/hanzi-writing-practice";
 import { useStudy } from "@/context/study-context";
@@ -87,6 +88,10 @@ function hasHintUsed(hints: HintFlags) {
 
 function getVisibleLessonTitle(card: DerivedCard) {
   return card.lessonId === UNASSIGNED_LESSON_ID ? null : card.lessonTitle;
+}
+
+function getLearnOptionClass(active: boolean) {
+  return active ? "btn-primary px-3 py-2 text-sm" : "btn-ghost px-3 py-2 text-sm";
 }
 
 export function StudySession({ flow, title, description }: StudySessionProps) {
@@ -430,7 +435,7 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
                     <button
                       key={value}
                       type="button"
-                      className={newWordsPerSession === value ? "btn-secondary px-3 py-2 text-sm" : "btn-ghost px-3 py-2 text-sm"}
+                      className={getLearnOptionClass(newWordsPerSession === value)}
                       onClick={() => setNewWordsPerSession(value)}
                     >
                       {value}
@@ -445,7 +450,7 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
                     <button
                       key={value}
                       type="button"
-                      className={activeWindowSize === value ? "btn-secondary px-3 py-2 text-sm" : "btn-ghost px-3 py-2 text-sm"}
+                      className={getLearnOptionClass(activeWindowSize === value)}
                       onClick={() => setActiveWindowSize(value)}
                     >
                       {value}
@@ -460,7 +465,7 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
                     <button
                       key={option.id}
                       type="button"
-                      className={learnMode === option.id ? "btn-secondary px-3 py-2 text-sm" : "btn-ghost px-3 py-2 text-sm"}
+                      className={getLearnOptionClass(learnMode === option.id)}
                       onClick={() => setLearnMode(option.id)}
                     >
                       {option.label}
@@ -666,8 +671,11 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
                       {visibleLessonTitle ? <span className="pill">{visibleLessonTitle}</span> : null}
                       <span className="pill">{STAGE_LABELS[currentCard.currentStage]}</span>
                     </div>
-                    <p className="text-xs uppercase tracking-[0.18em] subtle-text">Правильный ответ</p>
-                    <p className="mt-3 text-3xl font-semibold tracking-[-0.04em]">{prompt.answer}</p>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <p className="text-xs uppercase tracking-[0.18em] subtle-text">Правильный ответ</p>
+                      <CopyButton text={prompt.answer} label="Копировать ответ" copiedLabel="Скопировано" />
+                    </div>
+                    <p className="mt-3 select-text text-3xl font-semibold tracking-[-0.04em]">{prompt.answer}</p>
                     <p className="mt-2 text-xs uppercase tracking-[0.16em] subtle-text">Предзаписанный wav-файл</p>
                   </div>
 
@@ -691,14 +699,27 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
                   </div>
                 ) : null}
 
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-4 sm:grid-cols-3">
                   <div className="rounded-[28px] border border-white/10 bg-white/5 p-5">
-                    <p className="subtle-text text-xs uppercase tracking-[0.18em]">Пиньинь</p>
-                    <p className="mt-3 text-2xl font-semibold">{currentCard.pinyin}</p>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="subtle-text text-xs uppercase tracking-[0.18em]">Иероглиф</p>
+                      <CopyButton text={currentCard.hanzi} label="Копировать" copiedLabel="Скопировано" />
+                    </div>
+                    <p className="display-hanzi mt-3 select-text text-4xl font-semibold leading-none">{currentCard.hanzi}</p>
                   </div>
                   <div className="rounded-[28px] border border-white/10 bg-white/5 p-5">
-                    <p className="subtle-text text-xs uppercase tracking-[0.18em]">Перевод</p>
-                    <p className="mt-3 text-xl font-semibold">{currentCard.translation}</p>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="subtle-text text-xs uppercase tracking-[0.18em]">Пиньинь</p>
+                      <CopyButton text={currentCard.pinyin} label="Копировать" copiedLabel="Скопировано" />
+                    </div>
+                    <p className="mt-3 select-text text-2xl font-semibold">{currentCard.pinyin}</p>
+                  </div>
+                  <div className="rounded-[28px] border border-white/10 bg-white/5 p-5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="subtle-text text-xs uppercase tracking-[0.18em]">Перевод</p>
+                      <CopyButton text={currentCard.translation} label="Копировать" copiedLabel="Скопировано" />
+                    </div>
+                    <p className="mt-3 select-text text-xl font-semibold">{currentCard.translation}</p>
                   </div>
                 </div>
 

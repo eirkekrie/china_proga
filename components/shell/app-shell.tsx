@@ -19,6 +19,14 @@ const navItems = [
   { href: "/stats", label: "Статистика" },
 ];
 
+const androidNavItems = [
+  { href: "/", label: "Главная" },
+  { href: "/learn", label: "Учить" },
+  { href: "/review", label: "Повтор" },
+  { href: "/test", label: "Тест" },
+  { href: "/cards", label: "Карточки" },
+];
+
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const lessonScrollerRef = useRef<HTMLDivElement | null>(null);
@@ -30,6 +38,15 @@ export function AppShell({ children }: { children: ReactNode }) {
   const allLessonsActive = selectedLessonId === ALL_LESSONS_ID;
   const unassignedCards = cards.filter((card) => card.lessonId === UNASSIGNED_LESSON_ID);
   const unassignedActive = selectedLessonId === UNASSIGNED_LESSON_ID;
+  const selectedLesson =
+    selectedLessonId === ALL_LESSONS_ID
+      ? null
+      : selectedLessonId === UNASSIGNED_LESSON_ID
+        ? { title: UNASSIGNED_LESSON_TITLE, count: unassignedCards.length, progressPercent: 0 }
+        : availableLessons.find((lesson) => lesson.id === selectedLessonId);
+  const androidLessonTitle = selectedLesson?.title ?? "Все уроки";
+  const androidLessonCount = selectedLesson?.count ?? cards.length;
+  const androidLessonProgress = selectedLesson?.progressPercent ?? metrics.progressPercent;
 
   function scrollLessons(direction: -1 | 1) {
     lessonScrollerRef.current?.scrollBy({
@@ -39,7 +56,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="app-shell min-h-screen">
       <div className="pointer-events-none fixed inset-0 soft-grid opacity-40" />
 
       <header className="app-header sticky top-0 z-30">
@@ -150,7 +167,64 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">{children}</main>
+      <div className="android-topbar">
+        <div>
+          <Link href="/" className="android-brand">
+            Hanzi Flow
+          </Link>
+          <p>{androidLessonTitle}</p>
+        </div>
+        <div className="android-topbar-stats">
+          <span>{androidLessonCount} карт.</span>
+          <strong>{androidLessonProgress}%</strong>
+        </div>
+      </div>
+
+      <section className="android-lesson-strip" aria-label="Уроки">
+        <button
+          type="button"
+          disabled={!hydrated}
+          className={["android-lesson-pill", allLessonsActive ? "is-active" : ""].join(" ")}
+          onClick={() => setSelectedLessonId(ALL_LESSONS_ID)}
+        >
+          <span>Все</span>
+          <strong>{hydrated ? cards.length : "..."}</strong>
+        </button>
+        <button
+          type="button"
+          disabled={!hydrated || unassignedCards.length === 0}
+          className={["android-lesson-pill", unassignedActive ? "is-active" : ""].join(" ")}
+          onClick={() => setSelectedLessonId(UNASSIGNED_LESSON_ID)}
+        >
+          <span>{UNASSIGNED_LESSON_TITLE}</span>
+          <strong>{hydrated ? unassignedCards.length : "..."}</strong>
+        </button>
+        {availableLessons.map((lesson) => (
+          <button
+            key={lesson.id}
+            type="button"
+            disabled={!hydrated}
+            className={["android-lesson-pill", selectedLessonId === lesson.id ? "is-active" : ""].join(" ")}
+            onClick={() => setSelectedLessonId(lesson.id)}
+          >
+            <span>{lesson.title}</span>
+            <strong>{lesson.count}</strong>
+          </button>
+        ))}
+      </section>
+
+      <main className="app-main mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">{children}</main>
+
+      <nav className="android-bottom-nav" aria-label="Основная навигация">
+        {androidNavItems.map((item) => {
+          const active = pathname === item.href;
+          return (
+            <Link key={item.href} href={item.href} className={active ? "is-active" : ""}>
+              {item.label}
+            </Link>
+          );
+        })}
+      </nav>
     </div>
   );
 }

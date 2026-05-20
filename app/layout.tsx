@@ -10,8 +10,15 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
+  const isCapacitorBuild = process.env.NEXT_PUBLIC_CAPACITOR_BUILD === "1";
+
   return (
-    <html lang="ru" suppressHydrationWarning>
+    <html
+      lang="ru"
+      className={isCapacitorBuild ? "android-app" : undefined}
+      data-app-shell={isCapacitorBuild ? "android" : "web"}
+      suppressHydrationWarning
+    >
       <body>
         <StudyProvider>
           <AppShell>{children}</AppShell>

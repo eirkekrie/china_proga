@@ -477,3 +477,342 @@ select option {
     width: 100%;
   }
 }
+
+.android-topbar,
+.android-lesson-strip,
+.android-bottom-nav {
+  display: none;
+}
+
+html.android-app {
+  color-scheme: dark;
+  --background: 8 10 13;
+  --foreground: 242 245 247;
+  --muted: 152 163 176;
+  --panel: 18 21 26;
+  --panel-strong: 13 16 20;
+  --border: 49 57 66;
+  --accent: 108 218 198;
+  --accent-soft: 20 67 61;
+  --accent-strong: 159 245 229;
+  --shadow: 0 0 0;
+  background: rgb(var(--background));
+}
+
+html.android-app body {
+  min-height: 100svh;
+  background: rgb(var(--background));
+  overscroll-behavior-y: contain;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html.android-app .soft-grid,
+html.android-app .app-header {
+  display: none;
+}
+
+html.android-app .app-shell {
+  min-height: 100svh;
+  padding-top: calc(env(safe-area-inset-top) + 0.75rem);
+  padding-bottom: calc(env(safe-area-inset-bottom) + 5.75rem);
+}
+
+html.android-app .android-topbar {
+  display: flex;
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.65rem 1rem 0.5rem;
+  background: rgba(var(--background), 0.94);
+  backdrop-filter: blur(18px);
+}
+
+html.android-app .android-brand {
+  display: block;
+  color: rgb(var(--foreground));
+  font-size: 1.18rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+html.android-app .android-topbar p,
+html.android-app .android-topbar-stats span {
+  margin-top: 0.18rem;
+  color: rgba(var(--foreground), 0.58);
+  font-size: 0.78rem;
+  line-height: 1.1;
+}
+
+html.android-app .android-topbar-stats {
+  display: grid;
+  justify-items: end;
+  gap: 0.18rem;
+  white-space: nowrap;
+}
+
+html.android-app .android-topbar-stats strong {
+  color: rgb(var(--accent));
+  font-size: 1rem;
+}
+
+html.android-app .android-lesson-strip {
+  display: flex;
+  gap: 0.55rem;
+  overflow-x: auto;
+  padding: 0.45rem 1rem 0.75rem;
+  background: rgba(var(--background), 0.94);
+  scrollbar-width: none;
+}
+
+html.android-app .android-lesson-strip::-webkit-scrollbar {
+  display: none;
+}
+
+html.android-app .android-lesson-pill {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.25rem;
+  max-width: 10.5rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(var(--border), 0.62);
+  padding: 0.45rem 0.72rem;
+  background: rgba(var(--panel), 0.82);
+  color: rgba(var(--foreground), 0.76);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+html.android-app .android-lesson-pill span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html.android-app .android-lesson-pill strong {
+  color: rgb(var(--foreground));
+  font-size: 0.78rem;
+}
+
+html.android-app .android-lesson-pill.is-active {
+  border-color: rgba(var(--accent), 0.74);
+  background: rgba(var(--accent), 0.15);
+  color: rgb(var(--accent-strong));
+}
+
+html.android-app .android-lesson-pill:disabled {
+  opacity: 0.48;
+}
+
+html.android-app .app-main {
+  width: 100%;
+  max-width: none;
+  padding: 0.75rem 0.85rem 1rem;
+}
+
+html.android-app .android-bottom-nav {
+  display: grid;
+  position: fixed;
+  right: 0.75rem;
+  bottom: calc(env(safe-area-inset-bottom) + 0.55rem);
+  left: 0.75rem;
+  z-index: 50;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.25rem;
+  border: 1px solid rgba(var(--border), 0.62);
+  border-radius: 1.35rem;
+  padding: 0.38rem;
+  background: rgba(15, 18, 23, 0.94);
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(18px);
+}
+
+html.android-app .android-bottom-nav a {
+  display: inline-flex;
+  min-height: 2.55rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1rem;
+  color: rgba(var(--foreground), 0.62);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+html.android-app .android-bottom-nav a.is-active {
+  background: rgba(var(--accent), 0.18);
+  color: rgb(var(--accent-strong));
+}
+
+html.android-app .glass-panel {
+  border-radius: 1.25rem;
+  border-color: rgba(var(--border), 0.42);
+  background: rgb(var(--panel));
+  box-shadow: none;
+}
+
+html.android-app .pill {
+  border-color: rgba(var(--border), 0.46);
+  background: rgba(var(--panel-strong), 0.75);
+  font-size: 0.76rem;
+}
+
+html.android-app .btn-primary,
+html.android-app .btn-secondary,
+html.android-app .btn-ghost,
+html.android-app .btn-danger {
+  min-height: 3rem;
+  padding: 0.8rem 1rem;
+  border-radius: 1rem;
+  font-size: 0.95rem;
+}
+
+html.android-app .btn-primary {
+  box-shadow: none;
+}
+
+html.android-app .metric-value {
+  font-size: 1.7rem;
+}
+
+html.android-app .app-main > .grid {
+  gap: 0.85rem;
+}
+
+html.android-app .app-main > .grid > section:first-child {
+  padding: 1rem;
+}
+
+html.android-app .app-main > .grid > section:first-child h1 {
+  font-size: 1.45rem;
+  line-height: 1.12;
+  letter-spacing: 0;
+}
+
+html.android-app .app-main > .grid > section:first-child p {
+  font-size: 0.88rem;
+}
+
+html.android-app .app-main > .grid > section:first-child .space-y-5 > p,
+html.android-app .app-main > .grid > section:first-child .space-y-5 > h1 {
+  display: none;
+}
+
+html.android-app .app-main > .grid > section:first-child .space-y-5 {
+  gap: 0.75rem;
+}
+
+html.android-app .app-main > .grid > section:first-child .space-y-5::after {
+  content: "Быстрый старт";
+  display: block;
+  color: rgb(var(--foreground));
+  font-size: 1.55rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+html.android-app .app-main > .grid > section:first-child .flex.flex-wrap.gap-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+html.android-app .flip-card {
+  min-height: calc(100svh - 11.5rem);
+}
+
+html.android-app .flip-face {
+  border-radius: 1.25rem;
+}
+
+html.android-app .flip-face.glass-panel {
+  padding: 1rem;
+}
+
+html.android-app .flip-face .display-hanzi {
+  font-size: clamp(5.25rem, 34vw, 8.5rem);
+}
+
+html.android-app .flip-face .max-w-xl.text-sm.muted-text,
+html.android-app .flip-face .mt-auto,
+html.android-app .flip-face .rounded-\[28px\],
+html.android-app .flip-face .grid.gap-4.rounded-\[28px\],
+html.android-app .app-main section.grid.gap-6 > aside {
+  display: none;
+}
+
+html.android-app .flip-face .flex.flex-col.items-center {
+  min-height: calc(100svh - 17rem);
+  justify-content: center;
+  gap: 1.1rem;
+  padding: 1rem 0;
+}
+
+html.android-app .flip-face .grid.w-full.max-w-3xl {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.65rem;
+}
+
+html.android-app .flip-face .btn-primary.w-full.max-w-xl {
+  min-height: 3.7rem;
+  border-radius: 1.6rem;
+  font-size: 1rem;
+}
+
+html.android-app .flip-face .grid.gap-3.sm\:grid-cols-4,
+html.android-app .flip-face .grid.gap-3.sm\:grid-cols-3 {
+  position: sticky;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+  padding-top: 0.5rem;
+  background: linear-gradient(180deg, rgba(var(--panel), 0), rgb(var(--panel)) 28%);
+}
+
+html.android-app .flip-face .grid.gap-3.sm\:grid-cols-4 .btn-ghost {
+  grid-column: 1 / -1;
+}
+
+html.android-app .app-main section.grid.gap-6.xl\:grid-cols-\[minmax\(0\,1fr\)_22rem\],
+html.android-app .app-main section.grid.gap-6.xl\:grid-cols-\[minmax\(0\,1fr\)_20rem\] {
+  grid-template-columns: 1fr;
+}
+
+html.android-app .app-main .glass-panel.grid.gap-4.p-6 {
+  display: none;
+}
+
+html.android-app .app-main .glass-panel.p-5.sm\:p-6,
+html.android-app .app-main .glass-panel.p-6.sm\:p-8,
+html.android-app .app-main .glass-panel.p-6.sm\:p-7 {
+  padding: 1rem;
+}
+
+html.android-app input,
+html.android-app select,
+html.android-app textarea {
+  min-height: 3rem;
+  border-radius: 1rem !important;
+  font-size: 1rem;
+}
+
+html.android-app article.glass-panel {
+  padding: 1rem;
+}
+
+html.android-app article .display-hanzi {
+  font-size: 2.25rem;
+}
+
+html.android-app article .rounded-\[24px\],
+html.android-app article .grid.gap-3.sm\:grid-cols-3 {
+  display: none;
+}
+
+html.android-app .thin-scrollbar::-webkit-scrollbar {
+  display: none;
+}

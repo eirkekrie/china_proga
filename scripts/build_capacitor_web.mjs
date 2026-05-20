@@ -30,6 +30,7 @@ try {
     env: {
       ...process.env,
       CAPACITOR_BUILD: "1",
+      NEXT_PUBLIC_CAPACITOR_BUILD: "1",
       NEXT_PUBLIC_DISABLE_SERVER_STATE: "1",
     },
     shell: process.platform === "win32",
