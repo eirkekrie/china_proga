@@ -136,7 +136,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 onClick={() => setSelectedLessonId(UNASSIGNED_LESSON_ID)}
               >
                 {UNASSIGNED_LESSON_TITLE}
-                <strong>{hydrated ? unassignedCards.length : "вЂ¦"}</strong>
+                <strong>{hydrated ? unassignedCards.length : "…"}</strong>
                 <small>{hydrated ? `${unassignedCards.length} карточек` : ""}</small>
               </button>
               {availableLessons.map((lesson) => (

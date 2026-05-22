@@ -4,34 +4,38 @@
 
 :root {
   color-scheme: light;
-  --background: 246 248 250;
-  --foreground: 24 31 41;
-  --muted: 95 108 124;
+  --background: 247 248 246;
+  --foreground: 23 31 39;
+  --muted: 92 105 118;
   --panel: 255 255 255;
-  --panel-strong: 241 245 248;
-  --border: 196 207 218;
-  --accent: 38 131 143;
-  --accent-soft: 218 240 242;
-  --accent-strong: 16 89 99;
+  --panel-strong: 241 245 244;
+  --border: 189 203 208;
+  --accent: 24 132 124;
+  --accent-soft: 218 240 238;
+  --accent-strong: 13 88 84;
+  --accent-contrast: 246 255 253;
+  --accent-warm: 194 73 58;
   --success: 26 127 98;
   --warning: 197 114 28;
   --danger: 187 55 55;
-  --shadow: 20 28 39;
+  --shadow: 22 31 39;
   --font-sans: "Aptos", "Segoe UI Variable", "Noto Sans SC", "PingFang SC", sans-serif;
   --font-display: "STSong", "Songti SC", "Noto Serif SC", serif;
 }
 
 .dark {
   color-scheme: dark;
-  --background: 10 13 18;
-  --foreground: 232 237 243;
-  --muted: 151 163 179;
-  --panel: 18 24 32;
-  --panel-strong: 23 31 41;
-  --border: 55 66 82;
-  --accent: 92 209 187;
-  --accent-soft: 18 55 51;
-  --accent-strong: 174 246 231;
+  --background: 11 14 17;
+  --foreground: 235 240 242;
+  --muted: 151 164 172;
+  --panel: 19 24 28;
+  --panel-strong: 24 31 35;
+  --border: 58 70 76;
+  --accent: 83 211 190;
+  --accent-soft: 20 62 57;
+  --accent-strong: 165 246 231;
+  --accent-contrast: 5 24 23;
+  --accent-warm: 235 118 95;
   --success: 87 210 156;
   --warning: 235 179 83;
   --danger: 255 126 126;
@@ -45,11 +49,13 @@ html {
 body {
   min-height: 100vh;
   background:
-    linear-gradient(180deg, rgba(var(--panel-strong), 0.82), rgba(var(--background), 0) 24rem),
-    linear-gradient(135deg, rgba(var(--accent), 0.08), transparent 34rem),
+    linear-gradient(180deg, rgba(var(--panel-strong), 0.96), rgba(var(--background), 0.96) 24rem),
+    linear-gradient(125deg, rgba(var(--accent), 0.1), transparent 34rem),
+    linear-gradient(310deg, rgba(var(--accent-warm), 0.055), transparent 30rem),
     rgb(var(--background));
   color: rgb(var(--foreground));
   font-family: var(--font-sans);
+  text-rendering: optimizeLegibility;
 }
 
 * {
@@ -71,24 +77,29 @@ select option {
 }
 
 .glass-panel {
-  border-radius: 20px;
-  border: 1px solid rgba(var(--border), 0.5);
+  position: relative;
+  border-radius: 16px;
+  border: 1px solid rgba(var(--border), 0.62);
   background:
-    linear-gradient(180deg, rgba(var(--panel), 0.96), rgba(var(--panel-strong), 0.9));
+    linear-gradient(180deg, rgba(var(--panel), 0.96), rgba(var(--panel-strong), 0.88));
   box-shadow:
-    0 16px 40px rgba(var(--shadow), 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+    0 14px 34px rgba(var(--shadow), 0.09),
+    inset 0 1px 0 rgba(255, 255, 255, 0.58);
+  backdrop-filter: blur(14px);
 }
 
 .dark .glass-panel {
-  background: linear-gradient(180deg, rgba(var(--panel-strong), 0.98), rgba(var(--panel), 0.98));
-  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.28);
+  background: linear-gradient(180deg, rgba(var(--panel-strong), 0.98), rgba(var(--panel), 0.96));
+  box-shadow:
+    0 18px 46px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .app-header {
   border-bottom: 1px solid rgba(var(--border), 0.52);
-  background: rgba(var(--background), 0.9);
-  backdrop-filter: blur(18px);
+  background: rgba(var(--background), 0.86);
+  box-shadow: 0 12px 32px rgba(var(--shadow), 0.06);
+  backdrop-filter: blur(20px);
 }
 
 .dark .app-header {
@@ -103,8 +114,74 @@ select option {
   color: rgba(var(--foreground), 0.5);
 }
 
+[class*="tracking-"] {
+  letter-spacing: 0 !important;
+}
+
+a,
+button,
+input,
+select,
+textarea {
+  min-width: 0;
+}
+
+button,
+select {
+  cursor: pointer;
+}
+
+button:disabled,
+select:disabled,
+input:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgba(var(--accent), 0.34);
+  outline-offset: 3px;
+}
+
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea {
+  border-color: rgba(var(--border), 0.58) !important;
+  background: rgba(var(--panel), 0.72) !important;
+  color: rgb(var(--foreground));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.34);
+}
+
+.dark input:not([type="checkbox"]):not([type="radio"]),
+.dark select,
+.dark textarea {
+  background: rgba(var(--panel-strong), 0.78) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: rgba(var(--foreground), 0.44);
+}
+
 .display-hanzi {
   font-family: var(--font-display);
+}
+
+.rounded-\[30px\],
+.rounded-\[28px\],
+.rounded-\[24px\],
+.rounded-\[22px\] {
+  border-radius: 14px;
+}
+
+.rounded-\[18px\],
+.rounded-\[16px\] {
+  border-radius: 10px;
 }
 
 .pill {
@@ -114,8 +191,10 @@ select option {
   border-radius: 9999px;
   border: 1px solid rgba(var(--border), 0.48);
   padding: 0.45rem 0.85rem;
-  background: rgba(var(--panel), 0.78);
+  background: rgba(var(--panel), 0.82);
+  color: rgba(var(--foreground), 0.78);
   font-size: 0.85rem;
+  font-weight: 650;
 }
 
 .dark .pill {
@@ -127,8 +206,8 @@ select option {
   align-items: center;
   justify-content: center;
   white-space: nowrap;
-  border-radius: 9999px;
-  padding: 0.5rem 0.9rem;
+  border-radius: 12px;
+  padding: 0.52rem 0.88rem;
   color: rgba(var(--foreground), 0.7);
   font-size: 0.9rem;
   font-weight: 600;
@@ -139,7 +218,7 @@ select option {
 }
 
 .nav-chip:hover {
-  background: rgba(var(--panel), 0.72);
+  background: rgba(var(--panel), 0.84);
   color: rgb(var(--foreground));
 }
 
@@ -148,9 +227,11 @@ select option {
 }
 
 .nav-chip.is-active {
-  background: rgba(var(--accent), 0.14);
+  background: linear-gradient(135deg, rgba(var(--accent), 0.18), rgba(var(--accent-warm), 0.08));
   color: rgb(var(--accent-strong));
-  box-shadow: inset 0 0 0 1px rgba(var(--accent), 0.3);
+  box-shadow:
+    inset 0 0 0 1px rgba(var(--accent), 0.34),
+    0 8px 18px rgba(var(--accent), 0.1);
 }
 
 .top-stat {
@@ -160,9 +241,10 @@ select option {
   border-radius: 9999px;
   border: 1px solid rgba(var(--border), 0.45);
   padding: 0.48rem 0.78rem;
-  background: rgba(var(--panel), 0.8);
+  background: rgba(var(--panel), 0.86);
   color: rgba(var(--foreground), 0.72);
   font-size: 0.85rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.38);
 }
 
 .dark .top-stat {
@@ -174,10 +256,10 @@ select option {
   align-items: center;
   justify-content: center;
   min-height: 2.25rem;
-  border-radius: 9999px;
+  border-radius: 12px;
   border: 1px solid rgba(var(--border), 0.48);
   padding: 0.48rem 0.82rem;
-  background: rgba(var(--panel), 0.8);
+  background: rgba(var(--panel), 0.86);
   color: rgb(var(--foreground));
   font-size: 0.85rem;
   font-weight: 700;
@@ -190,6 +272,7 @@ select option {
 .theme-toggle:hover {
   transform: translateY(-1px);
   border-color: rgba(var(--accent), 0.4);
+  background: rgba(var(--accent), 0.1);
 }
 
 .dark .theme-toggle {
@@ -203,13 +286,14 @@ select option {
 .lesson-rail {
   display: flex;
   align-items: center;
-  gap: 0.85rem;
+  gap: 0.65rem;
   max-width: 100%;
   overflow: hidden;
-  border-radius: 18px;
-  border: 1px solid rgba(var(--border), 0.5);
-  background: rgba(var(--panel), 0.72);
+  border-radius: 16px;
+  border: 1px solid rgba(var(--border), 0.56);
+  background: rgba(var(--panel), 0.76);
   padding: 0.5rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.36);
 }
 
 .dark .lesson-rail {
@@ -229,12 +313,12 @@ select option {
 
 .lesson-scroll-button {
   display: inline-flex;
-  width: 2.35rem;
-  min-width: 2.35rem;
-  height: 2.35rem;
+  width: 2.25rem;
+  min-width: 2.25rem;
+  height: 2.25rem;
   align-items: center;
   justify-content: center;
-  border-radius: 9999px;
+  border-radius: 10px;
   border: 1px solid rgba(var(--border), 0.5);
   background: rgba(var(--panel), 0.82);
   color: rgb(var(--foreground));
@@ -264,7 +348,7 @@ select option {
   gap: 0.55rem;
   flex: 0 0 auto;
   white-space: nowrap;
-  border-radius: 9999px;
+  border-radius: 12px;
   border: 1px solid transparent;
   padding: 0.55rem 0.9rem;
   color: rgba(var(--foreground), 0.72);
@@ -295,7 +379,7 @@ select option {
 
 .lesson-chip.is-active {
   border-color: rgba(var(--accent), 0.42);
-  background: rgba(var(--accent), 0.16);
+  background: linear-gradient(135deg, rgba(var(--accent), 0.17), rgba(var(--accent-warm), 0.08));
   color: rgb(var(--accent-strong));
 }
 
@@ -321,10 +405,13 @@ select option {
   align-items: center;
   justify-content: center;
   gap: 0.55rem;
-  border-radius: 9999px;
+  border-radius: 12px;
   padding: 0.85rem 1.2rem;
   font-size: 0.95rem;
   font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  overflow-wrap: anywhere;
   transition:
     transform 180ms ease,
     box-shadow 180ms ease,
@@ -339,21 +426,35 @@ select option {
   transform: translateY(-1px);
 }
 
+.btn-primary:disabled,
+.btn-secondary:disabled,
+.btn-ghost:disabled,
+.btn-danger:disabled {
+  opacity: 0.58;
+  transform: none;
+  box-shadow: none;
+}
+
 .btn-primary {
-  background: rgb(var(--accent));
-  color: rgb(4 24 22);
-  box-shadow: 0 12px 24px rgba(var(--accent), 0.2);
+  border: 1px solid rgba(var(--accent), 0.42);
+  background: linear-gradient(135deg, rgb(var(--accent)), rgba(var(--accent-strong), 0.94));
+  color: rgb(var(--accent-contrast));
+  box-shadow: 0 12px 24px rgba(var(--accent), 0.22);
+}
+
+.btn-primary:hover {
+  box-shadow: 0 16px 30px rgba(var(--accent), 0.26);
 }
 
 .btn-secondary {
-  border: 1px solid rgba(var(--border), 0.46);
-  background: rgba(var(--panel), 0.58);
+  border: 1px solid rgba(var(--border), 0.58);
+  background: rgba(var(--panel), 0.68);
   color: rgb(var(--foreground));
 }
 
 .btn-ghost {
-  border: 1px solid rgba(var(--border), 0.28);
-  background: rgba(var(--panel), 0.24);
+  border: 1px solid rgba(var(--border), 0.38);
+  background: rgba(var(--panel), 0.34);
   color: rgb(var(--foreground));
 }
 
@@ -368,6 +469,7 @@ select option {
   line-height: 1;
   font-weight: 700;
   letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 .flip-scene {
@@ -382,6 +484,10 @@ select option {
     transform 700ms cubic-bezier(0.16, 1, 0.3, 1),
     box-shadow 240ms ease,
     border-color 240ms ease;
+}
+
+.flip-card:not(.is-flipped) {
+  transform: translateZ(0);
 }
 
 .flip-card.is-flipped {
@@ -405,13 +511,14 @@ select option {
 .progress-track {
   overflow: hidden;
   border-radius: 9999px;
-  background: rgba(var(--foreground), 0.08);
+  background: rgba(var(--foreground), 0.09);
+  box-shadow: inset 0 1px 2px rgba(var(--shadow), 0.08);
 }
 
 .meter-bar {
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, rgba(var(--accent), 0.9), rgba(var(--success), 0.9));
+  background: linear-gradient(90deg, rgba(var(--accent), 0.95), rgba(var(--success), 0.9));
 }
 
 .soft-grid {
@@ -456,6 +563,39 @@ select option {
 .thin-scrollbar::-webkit-scrollbar-thumb {
   background: rgba(var(--border), 0.5);
   border-radius: 9999px;
+}
+
+.animate-rise {
+  animation: rise-in 420ms ease both;
+}
+
+.glass-panel.transition:hover {
+  border-color: rgba(var(--accent), 0.42);
+  box-shadow:
+    0 18px 42px rgba(var(--shadow), 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.52);
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
+  }
 }
 
 @media (max-width: 640px) {
@@ -696,22 +836,8 @@ html.android-app .app-main > .grid > section:first-child p {
   font-size: 0.88rem;
 }
 
-html.android-app .app-main > .grid > section:first-child .space-y-5 > p,
-html.android-app .app-main > .grid > section:first-child .space-y-5 > h1 {
-  display: none;
-}
-
 html.android-app .app-main > .grid > section:first-child .space-y-5 {
   gap: 0.75rem;
-}
-
-html.android-app .app-main > .grid > section:first-child .space-y-5::after {
-  content: "Быстрый старт";
-  display: block;
-  color: rgb(var(--foreground));
-  font-size: 1.55rem;
-  font-weight: 800;
-  line-height: 1.1;
 }
 
 html.android-app .app-main > .grid > section:first-child .flex.flex-wrap.gap-3 {
