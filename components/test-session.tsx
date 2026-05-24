@@ -1,7 +1,8 @@
 ﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { HanziHandwritingAnswer, type HandwritingAnswerState } from "@/components/hanzi-handwriting-answer";
+import type { HandwritingAnswerState } from "@/components/hanzi-handwriting-answer";
+import { HanziSimilarityAnswer } from "@/components/hanzi-similarity-answer";
 import { useStudy } from "@/context/study-context";
 import { cardAudioEngine } from "@/lib/audio";
 import { STAGE_LABELS, STAGE_SHORT_LABELS, UNASSIGNED_LESSON_ID } from "@/lib/constants";
@@ -28,6 +29,11 @@ type TestResultEntry = {
   expected: string;
   isCorrect: boolean;
   grade: ReviewGrade;
+};
+
+type TestHandwritingState = HandwritingAnswerState & {
+  similarityScore?: number;
+  checked?: boolean;
 };
 
 const AUDIO_SOURCE_LABELS = {
@@ -79,7 +85,7 @@ export function TestSession() {
   const [result, setResult] = useState<TestResultEntry | null>(null);
   const [audioNotice, setAudioNotice] = useState<string | null>(null);
   const [audioSource, setAudioSource] = useState<keyof typeof AUDIO_SOURCE_LABELS | null>(null);
-  const [handwritingState, setHandwritingState] = useState<HandwritingAnswerState | null>(null);
+  const [handwritingState, setHandwritingState] = useState<TestHandwritingState | null>(null);
   const startedAtRef = useRef(0);
   const addStudyTimeRef = useRef(addStudyTime);
   const completedIdSet = useMemo(() => new Set(completedIds), [completedIds]);
@@ -136,6 +142,10 @@ export function TestSession() {
   useEffect(() => {
     if (!currentCard) {
       return;
+    }
+
+    if (mode === "translation_to_hanzi" && currentCard.hanzi.length > 1 && translationAnswerMode === "handwriting") {
+      setTranslationAnswerMode("choice");
     }
 
     startedAtRef.current = performance.now();
@@ -363,7 +373,12 @@ export function TestSession() {
   }
 
   const promptLead = mode === "translation_to_hanzi" ? currentCard.translation : currentCard.hanzi;
+  const promptLeadClass =
+    mode === "translation_to_hanzi"
+      ? "text-[clamp(2.25rem,5.5vw,4.25rem)] leading-[1.08] break-words [overflow-wrap:anywhere]"
+      : "display-hanzi text-[clamp(3.4rem,10vw,6rem)] leading-none";
   const isHandwritingMode = mode === "translation_to_hanzi" && translationAnswerMode === "handwriting";
+  const canUseHandwritingMode = currentCard.hanzi.length === 1;
   const hintUsed = hasHintUsed(hintFlags);
   const visibleLessonTitle = getVisibleLessonTitle(currentCard);
   const placeholder = "Введите пиньинь";
@@ -454,6 +469,8 @@ export function TestSession() {
                     <button
                       type="button"
                       className={translationAnswerMode === "handwriting" ? "btn-secondary" : "btn-ghost"}
+                      disabled={!canUseHandwritingMode}
+                      title={!canUseHandwritingMode ? "Рукописный режим сейчас доступен только для одного иероглифа" : undefined}
                       onClick={() => setTranslationAnswerMode("handwriting")}
                     >
                       Письмо
@@ -478,7 +495,7 @@ export function TestSession() {
             </div>
 
             <div className="rounded-[32px] border border-white/10 bg-white/5 p-6 text-center">
-              <p className="display-hanzi text-[clamp(3.4rem,10vw,6rem)] font-semibold leading-none">{promptLead}</p>
+              <p className={`${promptLeadClass} max-w-full font-semibold`}>{promptLead}</p>
 
               {showPinyinHint ? (
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
@@ -492,8 +509,8 @@ export function TestSession() {
               {supportLine ? <p className="mt-3 muted-text">{supportLine}</p> : null}
             </div>
 
-            {isHandwritingMode ? (
-              <HanziHandwritingAnswer hanzi={currentCard.hanzi} onChange={setHandwritingState} />
+            {isHandwritingMode && canUseHandwritingMode ? (
+              <HanziSimilarityAnswer hanzi={currentCard.hanzi} onChange={setHandwritingState} />
             ) : choiceOptions.length > 0 ? (
               <div className="grid gap-3">
                 {choiceOptions.map((option) => (
@@ -537,7 +554,7 @@ export function TestSession() {
             ) : null}
             {isHandwritingMode && handwritingState && !result ? (
               <p className="text-sm muted-text">
-                Рукописный ответ: {handwritingState.completedCharacters}/{handwritingState.totalCharacters} знаков · ошибок {handwritingState.totalMistakes}.
+                Рукописный ответ: похожесть {handwritingState.similarityScore ?? 0}% · попыток {handwritingState.totalMistakes}.
               </p>
             ) : null}
 

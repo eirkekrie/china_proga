@@ -92,16 +92,14 @@ def build_filename(index: int, card: ParsedCard) -> str:
 
 def build_generation_instruct(card: ParsedCard) -> str:
     return (
-        "Please read the Chinese text in standard Mandarin. "
-        "Speak only the Chinese text itself and do not read any explanation or pinyin aloud. "
-        f"Reading hint: {card.pinyin}."
+        "Speak slowly and clearly, with careful articulation of each syllable "
+        "and accurate Mandarin tones, like a teacher reading vocabulary "
+        "for a beginner language learner. Use a calm, neutral voice."
     )
 
 
 def build_generation_text(card: ParsedCard) -> str:
-    if card.hanzi.endswith(("\u3002", "\uff01", "\uff1f", ".", "!", "?")):
-        return card.hanzi
-    return f"{card.hanzi}\u3002"
+    return card.hanzi.strip()
 
 
 def load_existing_manifest(path: Path) -> dict:

@@ -109,6 +109,7 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
   const [newWordsPerSession, setNewWordsPerSession] = useState<(typeof NEW_WORD_LIMIT_OPTIONS)[number]>(5);
   const [activeWindowSize, setActiveWindowSize] = useState<(typeof ACTIVE_WINDOW_OPTIONS)[number]>(12);
   const [learnMode, setLearnMode] = useState<LearnQueueMode>("balanced");
+  const [manualReviewEnabled, setManualReviewEnabled] = useState(false);
   const [introducedNewIds, setIntroducedNewIds] = useState<string[]>([]);
   const [postponedIds, setPostponedIds] = useState<string[]>([]);
   const [history, setHistory] = useState<StudyHistoryEntry[]>([]);
@@ -127,7 +128,9 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
           reviewLimit: Math.max(0, activeWindowSize - remainingNewSlots),
         }
       : undefined;
-  const baseQueue = getQueue(flow, undefined, queueOptions);
+  const scheduledQueue = getQueue(flow, undefined, queueOptions);
+  const manualReviewQueue = flow === "review" ? getQueue("test") : [];
+  const baseQueue = flow === "review" && manualReviewEnabled ? manualReviewQueue : scheduledQueue;
   const queue = baseQueue.filter((card) => !postponedIds.includes(card.id));
   const recentWindowSize = flow === "review" ? REVIEW_ROTATION_WINDOW : LEARN_ROTATION_WINDOW;
   const rotationWindowSize = flow === "review" ? REVIEW_ROTATION_WINDOW : LEARN_ROTATION_WINDOW;
@@ -167,6 +170,7 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
     setPostponedIds([]);
     setIntroducedNewIds([]);
     setRotationIndex(0);
+    setManualReviewEnabled(false);
   }, [activeWindowSize, flow, learnMode, newWordsPerSession, selectedLessonId]);
 
   useEffect(() => {
@@ -365,6 +369,7 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
   }
 
   if (!currentCard) {
+    const canStartManualReview = flow === "review" && !manualReviewEnabled && manualReviewQueue.length > 0;
     const onlyPostponedCardsLeft = baseQueue.length > 0 && queue.length === 0 && postponedIds.length > 0;
     return (
       <section className="glass-panel p-8 sm:p-10">
@@ -376,7 +381,9 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
           <p className="max-w-2xl muted-text">
             {onlyPostponedCardsLeft
               ? "В текущей сессии остались только отложенные карточки. Можно вернуть их в очередь или перейти к другому режиму."
-              : "На сегодня нет карточек для этого режима. Можно открыть тест, посмотреть все карточки или импортировать новый набор слов."}
+              : canStartManualReview
+                ? "По расписанию на сегодня нет карточек, но можно запустить ручной повтор выбранного урока. Он возьмёт уже изучавшиеся карточки и отсортирует их по слабости памяти."
+                : "На сегодня нет карточек для этого режима. Можно открыть тест, посмотреть все карточки или импортировать новый набор слов."}
           </p>
           <div className="flex flex-wrap gap-3">
             {onlyPostponedCardsLeft ? (
@@ -389,6 +396,21 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
                 }}
               >
                 Вернуть отложенные
+              </button>
+            ) : null}
+            {canStartManualReview ? (
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => {
+                  setManualReviewEnabled(true);
+                  setPostponedIds([]);
+                  setCooldownIds([]);
+                  setCurrentCardId(null);
+                  setPresentationTick((value) => value + 1);
+                }}
+              >
+                Повторить урок сейчас
               </button>
             ) : null}
             <Link href="/" className="btn-primary">
@@ -409,6 +431,9 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
   const prompt = getPrompt(currentCard);
   const visibleLessonTitle = getVisibleLessonTitle(currentCard);
   const isHanziRecallStage = currentCard.currentStage === "translation_to_hanzi";
+  const promptLeadClass = isHanziRecallStage
+    ? "text-[clamp(2.4rem,6vw,4.75rem)] leading-[1.08] break-words [overflow-wrap:anywhere]"
+    : "display-hanzi text-[clamp(4rem,14vw,8rem)] leading-none tracking-tight";
   const hintUsed = hasHintUsed(hintFlags);
   const cardClass =
     flashGrade === "good"
@@ -423,7 +448,9 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
     <div className="grid gap-6">
       <section className="glass-panel grid gap-4 p-6 sm:grid-cols-[1.1fr_0.9fr] sm:p-7">
         <div className="flex flex-col gap-4">
-          <span className="pill w-fit">{flow === "review" ? "Повторение" : "Обучение"}</span>
+          <span className="pill w-fit">
+            {flow === "review" ? (manualReviewEnabled ? "Ручной повтор" : "Повторение") : "Обучение"}
+          </span>
           <h1 className="text-3xl font-semibold tracking-[-0.05em]">{title}</h1>
           <p className="max-w-3xl text-sm muted-text">{description}</p>
           {flow === "learn" ? (
@@ -553,7 +580,7 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
                 </div>
 
                 <div className="flex flex-col items-center justify-center gap-4 py-6 text-center">
-                  <p className="display-hanzi text-[clamp(4rem,14vw,8rem)] font-semibold leading-none tracking-tight">
+                  <p className={`${promptLeadClass} max-w-full font-semibold`}>
                     {prompt.lead}
                   </p>
 

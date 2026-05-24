@@ -3,38 +3,54 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useRef } from "react";
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
+import {
+  BarChart3,
+  BookOpen,
+  Brain,
+  ChevronLeft,
+  ChevronRight,
+  Compass,
+  Flame,
+  GraduationCap,
+  Library,
+  ListChecks,
+  Music2,
+  Timer,
+  TrendingUp,
+} from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useStudy } from "@/context/study-context";
 import { ALL_LESSONS_ID, UNASSIGNED_LESSON_ID, UNASSIGNED_LESSON_TITLE } from "@/lib/constants";
 import { formatDuration } from "@/lib/utils";
 
-const navItems = [
-  { href: "/", label: "Главная" },
-  { href: "/learn", label: "Обучение" },
-  { href: "/review", label: "Повторение" },
-  { href: "/test", label: "Тест" },
-  { href: "/tones", label: "Тоны" },
-  { href: "/cards", label: "Карточки" },
-  { href: "/stats", label: "Статистика" },
+type NavItem = {
+  href: string;
+  label: string;
+  shortLabel?: string;
+  icon: ComponentType<{ size?: number; className?: string }>;
+};
+
+const navItems: NavItem[] = [
+  { href: "/", label: "Дашборд", shortLabel: "Главная", icon: Compass },
+  { href: "/learn", label: "Обучение", shortLabel: "Учить", icon: GraduationCap },
+  { href: "/review", label: "Повторение", shortLabel: "Повтор", icon: Brain },
+  { href: "/test", label: "Тест", icon: ListChecks },
+  { href: "/tones", label: "Тоны", icon: Music2 },
+  { href: "/cards", label: "Картотека", shortLabel: "Карточки", icon: BookOpen },
+  { href: "/stats", label: "Аналитика", shortLabel: "Статы", icon: TrendingUp },
 ];
 
-const androidNavItems = [
-  { href: "/", label: "Главная" },
-  { href: "/learn", label: "Учить" },
-  { href: "/review", label: "Повтор" },
-  { href: "/test", label: "Тест" },
-  { href: "/cards", label: "Карточки" },
-];
+const androidNavItems = navItems.filter((item) => ["/", "/learn", "/review", "/test", "/cards"].includes(item.href));
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const lessonScrollerRef = useRef<HTMLDivElement | null>(null);
   const { availableLessons, cards, hydrated, metrics, selectedLessonId, setSelectedLessonId, stats } = useStudy();
 
-  const dueTodayLabel = hydrated ? String(metrics.dueTodayCount) : "…";
-  const progressLabel = hydrated ? `${metrics.progressPercent}%` : "…";
-  const sessionLabel = hydrated ? formatDuration(stats.sessionStudyTime) : "…";
+  const dueTodayLabel = hydrated ? String(metrics.dueTodayCount) : "...";
+  const progressLabel = hydrated ? `${metrics.progressPercent}%` : "...";
+  const sessionLabel = hydrated ? formatDuration(stats.sessionStudyTime) : "...";
   const allLessonsActive = selectedLessonId === ALL_LESSONS_ID;
   const unassignedCards = cards.filter((card) => card.lessonId === UNASSIGNED_LESSON_ID);
   const unassignedActive = selectedLessonId === UNASSIGNED_LESSON_ID;
@@ -57,115 +73,94 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="app-shell min-h-screen">
-      <div className="pointer-events-none fixed inset-0 soft-grid opacity-40" />
+      <div className="pointer-events-none fixed inset-0 soft-grid opacity-50" />
+      <div className="pointer-events-none fixed left-[18rem] top-[-12rem] h-[34rem] w-[34rem] rounded-full bg-sky-500/5 blur-glow" />
+      <div className="pointer-events-none fixed bottom-[-12rem] right-[12rem] h-[30rem] w-[30rem] rounded-full bg-indigo-500/5 blur-glow" />
 
-      <header className="app-header sticky top-0 z-30">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-3 sm:px-6 lg:px-8">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-col gap-2">
-              <Link href="/" className="text-xl font-semibold tracking-[-0.04em]">
-                Hanzi Flow
-              </Link>
-              <p className="hidden max-w-2xl text-xs muted-text md:block">
-                Поэтапная система изучения китайских иероглифов с forgetting curve, повторением, таймингом сессий и
-                отдельными тренировками на тоны.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="top-stat">
-                Повторить сегодня
-                <strong>{dueTodayLabel}</strong>
-              </span>
-              <span className="top-stat">
-                Прогресс
-                <strong>{progressLabel}</strong>
-              </span>
-              <span className="top-stat">
-                Сессия
-                <strong>{sessionLabel}</strong>
-              </span>
-              <ThemeToggle />
-            </div>
+      <header className="mobile-header app-header sticky top-0 z-40 border-b lg:hidden">
+        <div className="flex items-center justify-between gap-3 px-4 py-3">
+          <Link href="/" className="brand-lockup">
+            <span className="brand-mark">漢</span>
+            <span>
+              <span className="brand-name">Hanzi Flow</span>
+              <span className="brand-kicker">FSRS Trainer</span>
+            </span>
+          </Link>
+          <div className="flex items-center gap-2">
+            <span className="top-stat hidden sm:inline-flex">
+              <Flame size={14} />
+              <strong>{dueTodayLabel}</strong>
+            </span>
+            <ThemeToggle />
           </div>
-
-          <nav className="thin-scrollbar overflow-x-auto">
-            <div className="flex min-w-max items-center gap-2 pb-1">
-              {navItems.map((item) => {
-                const active = pathname === item.href;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={["nav-chip", active ? "is-active" : ""].join(" ")}
-                  >
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </div>
-          </nav>
-
-          <section className="lesson-rail">
-            <div className="shrink-0 px-1">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] subtle-text">Уроки</p>
-            </div>
-            <button
-              type="button"
-              className="lesson-scroll-button"
-              aria-label="Прокрутить уроки влево"
-              onClick={() => scrollLessons(-1)}
-            >
-              {"<"}
-            </button>
-            <div ref={lessonScrollerRef} className="thin-scrollbar lesson-scroller">
-              <button
-                type="button"
-                disabled={!hydrated}
-                className={["lesson-chip", allLessonsActive ? "is-active" : ""].join(" ")}
-                onClick={() => setSelectedLessonId(ALL_LESSONS_ID)}
-              >
-                Все уроки
-                <strong>{hydrated ? cards.length : "…"}</strong>
-                <small>{hydrated ? `${metrics.progressPercent}% · ${metrics.dueTodayCount} к повтору` : ""}</small>
-              </button>
-              <button
-                type="button"
-                disabled={!hydrated || unassignedCards.length === 0}
-                className={["lesson-chip", unassignedActive ? "is-active" : ""].join(" ")}
-                onClick={() => setSelectedLessonId(UNASSIGNED_LESSON_ID)}
-              >
-                {UNASSIGNED_LESSON_TITLE}
-                <strong>{hydrated ? unassignedCards.length : "…"}</strong>
-                <small>{hydrated ? `${unassignedCards.length} карточек` : ""}</small>
-              </button>
-              {availableLessons.map((lesson) => (
-                <button
-                  key={lesson.id}
-                  type="button"
-                  disabled={!hydrated}
-                  className={["lesson-chip", selectedLessonId === lesson.id ? "is-active" : ""].join(" ")}
-                  onClick={() => setSelectedLessonId(lesson.id)}
-                >
-                  {lesson.title}
-                  <strong>{lesson.count}</strong>
-                  <small>
-                    {lesson.progressPercent}% · {lesson.newCount} новых · {lesson.reviewCount} к повтору
-                  </small>
-                </button>
-              ))}
-            </div>
-            <button
-              type="button"
-              className="lesson-scroll-button"
-              aria-label="Прокрутить уроки вправо"
-              onClick={() => scrollLessons(1)}
-            >
-              {">"}
-            </button>
-          </section>
         </div>
+        <nav className="thin-scrollbar overflow-x-auto px-4 pb-3">
+          <div className="flex min-w-max items-center gap-2">
+            {navItems.map((item) => {
+              const active = pathname === item.href;
+              const Icon = item.icon;
+              return (
+                <Link key={item.href} href={item.href} className={["nav-chip", active ? "is-active" : ""].join(" ")}>
+                  <Icon size={15} />
+                  {item.shortLabel ?? item.label}
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
       </header>
+
+      <aside className="desktop-sidebar hidden lg:flex">
+        <div className="space-y-7">
+          <Link href="/" className="brand-lockup px-1">
+            <span className="brand-mark">漢</span>
+            <span>
+              <span className="brand-name">Hanzi Flow</span>
+              <span className="brand-kicker">FSRS Trainer</span>
+            </span>
+          </Link>
+
+          <nav className="grid gap-1.5">
+            {navItems.map((item) => {
+              const active = pathname === item.href;
+              const Icon = item.icon;
+              return (
+                <Link key={item.href} href={item.href} className={["nav-chip", active ? "is-active" : ""].join(" ")}>
+                  <Icon size={16} />
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
+
+        <div className="grid gap-4 border-t border-white/5 pt-5">
+          <div className="grid gap-2">
+            <div className="flex items-center justify-between gap-3 text-[10px] font-bold uppercase text-slate-500">
+              <span>Локальный режим</span>
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-70" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-sky-400" />
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <span className="sidebar-stat">
+                <Flame size={14} />
+                {dueTodayLabel}
+              </span>
+              <span className="sidebar-stat">
+                <BarChart3 size={14} />
+                {progressLabel}
+              </span>
+            </div>
+            <span className="sidebar-stat justify-start">
+              <Timer size={14} />
+              Сессия {sessionLabel}
+            </span>
+          </div>
+          <ThemeToggle />
+        </div>
+      </aside>
 
       <div className="android-topbar">
         <div>
@@ -180,47 +175,76 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </div>
 
-      <section className="android-lesson-strip" aria-label="Уроки">
-        <button
-          type="button"
-          disabled={!hydrated}
-          className={["android-lesson-pill", allLessonsActive ? "is-active" : ""].join(" ")}
-          onClick={() => setSelectedLessonId(ALL_LESSONS_ID)}
-        >
-          <span>Все</span>
-          <strong>{hydrated ? cards.length : "..."}</strong>
-        </button>
-        <button
-          type="button"
-          disabled={!hydrated || unassignedCards.length === 0}
-          className={["android-lesson-pill", unassignedActive ? "is-active" : ""].join(" ")}
-          onClick={() => setSelectedLessonId(UNASSIGNED_LESSON_ID)}
-        >
-          <span>{UNASSIGNED_LESSON_TITLE}</span>
-          <strong>{hydrated ? unassignedCards.length : "..."}</strong>
-        </button>
-        {availableLessons.map((lesson) => (
+      <main className="app-main">
+        <section className="lesson-rail mb-6">
+          <div className="lesson-rail-label">
+            <Library size={14} />
+            <span>Уроки</span>
+          </div>
           <button
-            key={lesson.id}
             type="button"
-            disabled={!hydrated}
-            className={["android-lesson-pill", selectedLessonId === lesson.id ? "is-active" : ""].join(" ")}
-            onClick={() => setSelectedLessonId(lesson.id)}
+            className="lesson-scroll-button"
+            aria-label="Прокрутить уроки влево"
+            onClick={() => scrollLessons(-1)}
           >
-            <span>{lesson.title}</span>
-            <strong>{lesson.count}</strong>
+            <ChevronLeft size={16} />
           </button>
-        ))}
-      </section>
+          <div ref={lessonScrollerRef} className="thin-scrollbar lesson-scroller">
+            <button
+              type="button"
+              disabled={!hydrated}
+              className={["lesson-chip", allLessonsActive ? "is-active" : ""].join(" ")}
+              onClick={() => setSelectedLessonId(ALL_LESSONS_ID)}
+            >
+              Все уроки
+              <strong>{hydrated ? cards.length : "..."}</strong>
+              <small>{hydrated ? `${metrics.progressPercent}% · ${metrics.dueTodayCount} к повтору` : ""}</small>
+            </button>
+            <button
+              type="button"
+              disabled={!hydrated || unassignedCards.length === 0}
+              className={["lesson-chip", unassignedActive ? "is-active" : ""].join(" ")}
+              onClick={() => setSelectedLessonId(UNASSIGNED_LESSON_ID)}
+            >
+              {UNASSIGNED_LESSON_TITLE}
+              <strong>{hydrated ? unassignedCards.length : "..."}</strong>
+              <small>{hydrated ? `${unassignedCards.length} карточек` : ""}</small>
+            </button>
+            {availableLessons.map((lesson) => (
+              <button
+                key={lesson.id}
+                type="button"
+                disabled={!hydrated}
+                className={["lesson-chip", selectedLessonId === lesson.id ? "is-active" : ""].join(" ")}
+                onClick={() => setSelectedLessonId(lesson.id)}
+              >
+                {lesson.title}
+                <strong>{lesson.count}</strong>
+                <small>
+                  {lesson.progressPercent}% · {lesson.newCount} новых · {lesson.reviewCount} к повтору
+                </small>
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="lesson-scroll-button"
+            aria-label="Прокрутить уроки вправо"
+            onClick={() => scrollLessons(1)}
+          >
+            <ChevronRight size={16} />
+          </button>
+        </section>
 
-      <main className="app-main mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">{children}</main>
+        {children}
+      </main>
 
       <nav className="android-bottom-nav" aria-label="Основная навигация">
         {androidNavItems.map((item) => {
           const active = pathname === item.href;
           return (
             <Link key={item.href} href={item.href} className={active ? "is-active" : ""}>
-              {item.label}
+              {item.shortLabel ?? item.label}
             </Link>
           );
         })}
