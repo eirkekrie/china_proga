@@ -10,6 +10,16 @@ export type ReviewGrade = "again" | "hard" | "good";
 export type StudyFlow = "learn" | "review" | "test";
 export type ThemeMode = "light" | "dark";
 export type LearnQueueMode = "balanced" | "new_only" | "hard_only";
+export type StudyActivityKind =
+  | "cards"
+  | "test"
+  | "tones"
+  | "grammar"
+  | "reading"
+  | "listening"
+  | "writing"
+  | "speaking"
+  | "custom";
 
 export type StudyQueueOptions = {
   learnMode?: LearnQueueMode;
@@ -86,6 +96,25 @@ export type StudyStats = {
   streakDays: number;
   lastStudyDate: string | null;
   dailyStudyLog: Record<string, number>;
+  studySessions: StudySessionLogEntry[];
+};
+
+export type StudySessionLogEntry = {
+  id: string;
+  date: string;
+  title: string;
+  activity: StudyActivityKind;
+  durationMs: number;
+  note: string;
+  createdAt: string;
+};
+
+export type StudySessionInput = {
+  date: string;
+  title: string;
+  activity: StudyActivityKind;
+  durationMs: number;
+  note?: string;
 };
 
 export type ParseResult = {

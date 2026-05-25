@@ -20,6 +20,8 @@ import type {
   LessonSummary,
   ParseResult,
   ReviewGrade,
+  StudySessionInput,
+  StudySessionLogEntry,
   StudyFlow,
   StudyQueueOptions,
   StudyStats,
@@ -45,6 +47,8 @@ type StudyContextValue = {
   answerCard: (cardId: string, grade: ReviewGrade, responseTimeMs: number) => Card | null;
   resetLessonProgress: (lessonId: string) => number;
   addStudyTime: (durationMs: number) => void;
+  addStudySession: (session: StudySessionInput) => StudySessionLogEntry | null;
+  deleteStudySession: (sessionId: string) => boolean;
   getQueue: (flow: StudyFlow, forcedStage?: LearningStage, options?: StudyQueueOptions) => DerivedCard[];
 };
 
@@ -140,57 +144,132 @@ function shouldPreferCachedState(cached: PersistedAppState, remote: PersistedApp
   return cachedPracticedCards > remotePracticedCards;
 }
 
-function touchStudyDay(stats: StudyStats, now: Date) {
+const STUDY_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+function cleanDailyStudyLog(dailyStudyLog: Record<string, number>) {
+  const cleaned: Record<string, number> = {};
+
+  Object.entries(dailyStudyLog).forEach(([key, value]) => {
+    if (STUDY_DATE_PATTERN.test(key) && Number.isFinite(value) && value > 0) {
+      cleaned[key] = Math.round(value);
+    }
+  });
+
+  return cleaned;
+}
+
+function getLastStudyDate(dailyStudyLog: Record<string, number>) {
+  return Object.keys(dailyStudyLog)
+    .filter((key) => dailyStudyLog[key] > 0)
+    .sort()
+    .at(-1) ?? null;
+}
+
+function getCurrentStreakDays(dailyStudyLog: Record<string, number>, now: Date) {
+  let streakDays = 0;
+  const cursor = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  while ((dailyStudyLog[dayKey(cursor)] ?? 0) > 0) {
+    streakDays += 1;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+
+  return streakDays;
+}
+
+function syncStatsCalendar(stats: StudyStats, now: Date) {
   const today = dayKey(now);
-  if (stats.lastStudyDate === today) {
-    return stats;
-  }
-
-  if (!stats.lastStudyDate) {
-    return {
-      ...stats,
-      streakDays: 1,
-      lastStudyDate: today,
-    };
-  }
-
-  const previousDate = new Date(`${stats.lastStudyDate}T00:00:00`);
-  const yesterday = new Date(`${today}T00:00:00`);
-  yesterday.setDate(yesterday.getDate() - 1);
+  const dailyStudyLog = cleanDailyStudyLog(stats.dailyStudyLog);
 
   return {
     ...stats,
-    streakDays: dayKey(previousDate) === dayKey(yesterday) ? stats.streakDays + 1 : 1,
-    lastStudyDate: today,
+    dailyStudyLog,
+    todayStudyTime: dailyStudyLog[today] ?? 0,
+    streakDays: getCurrentStreakDays(dailyStudyLog, now),
+    lastStudyDate: getLastStudyDate(dailyStudyLog),
   };
 }
 
 function normalizeStatsForToday(stats: StudyStats, now: Date) {
-  const today = dayKey(now);
-  if (stats.lastStudyDate === today || stats.lastStudyDate === null) {
-    return stats;
-  }
-
-  return {
-    ...stats,
-    todayStudyTime: 0,
-  };
+  return syncStatsCalendar(stats, now);
 }
 
 function recordStudyTime(stats: StudyStats, now: Date, durationMs: number) {
-  const touched = touchStudyDay(normalizeStatsForToday(stats, now), now);
   const today = dayKey(now);
+  const normalized = normalizeStatsForToday(stats, now);
+  const dailyStudyLog = {
+    ...normalized.dailyStudyLog,
+    [today]: (normalized.dailyStudyLog[today] ?? 0) + durationMs,
+  };
+
+  return syncStatsCalendar(
+    {
+      ...normalized,
+      totalStudyTime: normalized.totalStudyTime + durationMs,
+      sessionStudyTime: normalized.sessionStudyTime + durationMs,
+      dailyStudyLog,
+    },
+    now,
+  );
+}
+
+function createStudySession(input: StudySessionInput, now: Date): StudySessionLogEntry | null {
+  const durationMs = Math.round(input.durationMs);
+
+  if (!STUDY_DATE_PATTERN.test(input.date) || !Number.isFinite(durationMs) || durationMs <= 0) {
+    return null;
+  }
 
   return {
-    ...touched,
-    totalStudyTime: touched.totalStudyTime + durationMs,
-    todayStudyTime: touched.todayStudyTime + durationMs,
-    sessionStudyTime: touched.sessionStudyTime + durationMs,
-    dailyStudyLog: {
-      ...touched.dailyStudyLog,
-      [today]: (touched.dailyStudyLog[today] ?? 0) + durationMs,
-    },
+    id: `session-${now.getTime().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    date: input.date,
+    title: input.title.trim() || "Учебная сессия",
+    activity: input.activity,
+    durationMs,
+    note: input.note?.trim() ?? "",
+    createdAt: now.toISOString(),
   };
+}
+
+function recordStudySession(stats: StudyStats, session: StudySessionLogEntry, now: Date) {
+  const normalized = normalizeStatsForToday(stats, now);
+  const dailyStudyLog = {
+    ...normalized.dailyStudyLog,
+    [session.date]: (normalized.dailyStudyLog[session.date] ?? 0) + session.durationMs,
+  };
+
+  return syncStatsCalendar(
+    {
+      ...normalized,
+      totalStudyTime: normalized.totalStudyTime + session.durationMs,
+      dailyStudyLog,
+      studySessions: [session, ...normalized.studySessions],
+    },
+    now,
+  );
+}
+
+function removeStudySession(stats: StudyStats, session: StudySessionLogEntry, now: Date) {
+  const normalized = normalizeStatsForToday(stats, now);
+  const nextDayTotal = Math.max(0, (normalized.dailyStudyLog[session.date] ?? 0) - session.durationMs);
+  const dailyStudyLog = {
+    ...normalized.dailyStudyLog,
+    [session.date]: nextDayTotal,
+  };
+
+  if (nextDayTotal <= 0) {
+    delete dailyStudyLog[session.date];
+  }
+
+  return syncStatsCalendar(
+    {
+      ...normalized,
+      totalStudyTime: Math.max(0, normalized.totalStudyTime - session.durationMs),
+      dailyStudyLog,
+      studySessions: normalized.studySessions.filter((entry) => entry.id !== session.id),
+    },
+    now,
+  );
 }
 
 export function StudyProvider({ children }: { children: ReactNode }) {
@@ -448,7 +527,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         return updatedCard;
       });
 
-      const normalizedStats = touchStudyDay(normalizeStatsForToday(previous.stats, now), now);
+      const normalizedStats = normalizeStatsForToday(previous.stats, now);
 
       return {
         ...previous,
@@ -504,6 +583,44 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     }));
   }
 
+  function addStudySession(input: StudySessionInput) {
+    const now = new Date();
+    const session = createStudySession(input, now);
+
+    if (!session) {
+      return null;
+    }
+
+    setState((previous) => ({
+      ...previous,
+      stats: recordStudySession(previous.stats, session, now),
+    }));
+
+    return session;
+  }
+
+  function deleteStudySession(sessionId: string) {
+    let deleted = false;
+    const now = new Date();
+
+    setState((previous) => {
+      const session = previous.stats.studySessions.find((entry) => entry.id === sessionId);
+
+      if (!session) {
+        return previous;
+      }
+
+      deleted = true;
+
+      return {
+        ...previous,
+        stats: removeStudySession(previous.stats, session, now),
+      };
+    });
+
+    return deleted;
+  }
+
   function getQueue(flow: StudyFlow, forcedStage?: LearningStage, options?: StudyQueueOptions) {
     return buildStudyQueue(filteredCards, flow, new Date(), forcedStage, options);
   }
@@ -529,6 +646,8 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         answerCard,
         resetLessonProgress,
         addStudyTime,
+        addStudySession,
+        deleteStudySession,
         getQueue,
       }}
     >

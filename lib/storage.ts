@@ -8,7 +8,7 @@
 } from "@/lib/fsrs";
 import { STARTER_CARD_LINES, STORAGE_KEY, UNASSIGNED_LESSON_ID, UNASSIGNED_LESSON_TITLE } from "@/lib/constants";
 import { parseCardLines } from "@/lib/parser";
-import type { Card, StudyStats, ThemeMode } from "@/lib/types";
+import type { Card, StudyActivityKind, StudySessionLogEntry, StudyStats, ThemeMode } from "@/lib/types";
 
 export type PersistedAppState = {
   cards: Card[];
@@ -27,6 +27,61 @@ export function createDefaultStats(): StudyStats {
     streakDays: 0,
     lastStudyDate: null,
     dailyStudyLog: {},
+    studySessions: [],
+  };
+}
+
+const studyActivityKinds = new Set<StudyActivityKind>([
+  "cards",
+  "test",
+  "tones",
+  "grammar",
+  "reading",
+  "listening",
+  "writing",
+  "speaking",
+  "custom",
+]);
+
+function sanitizeDailyStudyLog(raw: unknown): Record<string, number> {
+  if (!raw || typeof raw !== "object") {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(raw)
+      .map(([key, value]) => [key, Number(value)] as const)
+      .filter(([key, value]) => /^\d{4}-\d{2}-\d{2}$/.test(key) && Number.isFinite(value) && value > 0)
+      .map(([key, value]) => [key, Math.round(value)]),
+  );
+}
+
+function sanitizeStudySession(raw: Partial<StudySessionLogEntry> | undefined, index: number): StudySessionLogEntry | null {
+  const durationMs = Number(raw?.durationMs);
+  const date = typeof raw?.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw.date) ? raw.date : null;
+
+  if (!date || !Number.isFinite(durationMs) || durationMs <= 0) {
+    return null;
+  }
+
+  const activity = studyActivityKinds.has(raw?.activity as StudyActivityKind)
+    ? (raw?.activity as StudyActivityKind)
+    : "custom";
+  const fallbackTitle = activity === "cards" ? "Карточки" : "Учебная сессия";
+  const title = typeof raw?.title === "string" && raw.title.trim() ? raw.title.trim() : fallbackTitle;
+  const createdAt =
+    typeof raw?.createdAt === "string" && !Number.isNaN(new Date(raw.createdAt).getTime())
+      ? raw.createdAt
+      : new Date(`${date}T12:00:00`).toISOString();
+
+  return {
+    id: typeof raw?.id === "string" && raw.id.trim() ? raw.id : `session-${date}-${index}`,
+    date,
+    title,
+    activity,
+    durationMs: Math.round(durationMs),
+    note: typeof raw?.note === "string" ? raw.note.trim() : "",
+    createdAt,
   };
 }
 
@@ -103,12 +158,19 @@ export function sanitizeCard(raw: Partial<Card> & { currentStage?: string }): Ca
 }
 
 export function sanitizeStats(raw: Partial<StudyStats> | undefined): StudyStats {
+  const dailyStudyLog = sanitizeDailyStudyLog(raw?.dailyStudyLog);
+
   return {
     ...createDefaultStats(),
     ...raw,
     todayStudyTime: raw?.todayStudyTime ?? 0,
     sessionStudyTime: 0,
-    dailyStudyLog: raw?.dailyStudyLog ?? {},
+    dailyStudyLog,
+    studySessions: Array.isArray(raw?.studySessions)
+      ? raw.studySessions
+          .map((session, index) => sanitizeStudySession(session as Partial<StudySessionLogEntry>, index))
+          .filter((session): session is StudySessionLogEntry => Boolean(session))
+      : [],
   };
 }
 
