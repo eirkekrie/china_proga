@@ -64,11 +64,30 @@ python scripts/generate_card_audio.py --input path/to/cards.txt
 npm run generate:audio -- --input path/to/cards.txt
 ```
 
-Перед этим установите зависимости:
+По умолчанию используется Qwen TTS. Для CosyVoice 3.0 передайте `--engine cosyvoice`:
+
+```bash
+npm run generate:audio -- --engine cosyvoice --input path/to/cards.txt --force
+```
+
+Перед Qwen-генерацией установите зависимости:
 
 ```bash
 pip install -r requirements-qwen-tts.txt
 ```
+
+Перед CosyVoice-генерацией нужен установленный официальный репозиторий CosyVoice и модель Fun-CosyVoice3. Пример раскладки:
+
+```bash
+git clone --recursive https://github.com/FunAudioLLM/CosyVoice.git assets/cosyvoice/CosyVoice
+cd assets/cosyvoice/CosyVoice
+pip install -r requirements.txt
+python -c "from modelscope import snapshot_download; snapshot_download('FunAudioLLM/Fun-CosyVoice3-0.5B-2512', local_dir='pretrained_models/Fun-CosyVoice3-0.5B')"
+```
+
+Если скачиваете модель в локальный каталог как в примере, укажите `COSYVOICE_MODEL_DIR=pretrained_models/Fun-CosyVoice3-0.5B`. Без этого значения генератор попробует отдать ModelScope ID напрямую в `AutoModel`.
+
+Для `COSYVOICE_MODE=instruct2` нужен `COSYVOICE_REF_AUDIO`. Для `COSYVOICE_MODE=zero_shot` дополнительно нужен `COSYVOICE_REF_TEXT`.
 
 Файл на входе должен быть формата обычных карточек или карточек с заголовками уроков:
 
@@ -84,6 +103,7 @@ urok 3
 
 - `--force` — пересоздать аудио даже если файл уже есть
 - `--limit 10` — сгенерировать только первые 10 карточек для проверки
+- `--engine qwen|cosyvoice` — выбрать TTS-движок
 - `--output-dir public/audio/cards` — изменить каталог аудиофайлов
 - `--manifest public/audio/cards/manifest.json` — изменить путь манифеста
 
@@ -98,6 +118,14 @@ urok 3
 - `QWEN_TTS_INSTRUCT`
 - `QWEN_TTS_REF_AUDIO`
 - `QWEN_TTS_REF_TEXT`
+- `COSYVOICE_REPO_DIR`
+- `COSYVOICE_MODEL_DIR`
+- `COSYVOICE_MODEL_ID`
+- `COSYVOICE_MODE`
+- `COSYVOICE_REF_AUDIO`
+- `COSYVOICE_REF_TEXT`
+- `COSYVOICE_INSTRUCT`
+- `COSYVOICE_SPEED`
 
 ## Что внутри
 

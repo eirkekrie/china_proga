@@ -52,6 +52,8 @@ pnpm-debug.log*
 # Generated TTS assets
 assets/qwen-tts/*
 !assets/qwen-tts/.gitkeep
+assets/cosyvoice/*
+!assets/cosyvoice/.gitkeep
 public/audio/cards/*
 !public/audio/cards/.gitkeep
 data/*.db

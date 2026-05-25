@@ -17,16 +17,8 @@ database.exec(`
   )
 `);
 
-const getStateStatement = database.prepare("SELECT payload FROM app_state WHERE id = 1");
-const saveStateStatement = database.prepare(`
-  INSERT INTO app_state (id, payload, updated_at)
-  VALUES (1, ?, ?)
-  ON CONFLICT(id) DO UPDATE SET
-    payload = excluded.payload,
-    updated_at = excluded.updated_at
-`);
-
 export function loadDatabaseState() {
+  const getStateStatement = database.prepare("SELECT payload FROM app_state WHERE id = 1");
   const row = getStateStatement.get() as { payload: string } | undefined;
 
   if (!row) {
@@ -46,6 +38,13 @@ export function loadDatabaseState() {
 
 export function saveDatabaseState(state: PersistedAppState) {
   const normalized = normalizePersistedState(state);
+  const saveStateStatement = database.prepare(`
+    INSERT INTO app_state (id, payload, updated_at)
+    VALUES (1, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      payload = excluded.payload,
+      updated_at = excluded.updated_at
+  `);
   saveStateStatement.run(JSON.stringify(normalized), new Date().toISOString());
   return normalized;
 }

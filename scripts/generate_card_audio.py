@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+from cosyvoice_runtime import CosyVoiceRuntime
 from qwen_tts_runtime import REPO_ROOT, QwenTTSRuntime
 
 
@@ -102,6 +103,22 @@ def build_generation_text(card: ParsedCard) -> str:
     return card.hanzi.strip()
 
 
+def create_tts_runtime(engine: str):
+    if engine == "qwen":
+        return QwenTTSRuntime()
+    if engine == "cosyvoice":
+        return CosyVoiceRuntime()
+    raise ValueError(f"Unsupported TTS engine: {engine}")
+
+
+def get_engine_manifest_name(engine: str) -> str:
+    if engine == "qwen":
+        return "qwen3-tts-local"
+    if engine == "cosyvoice":
+        return "cosyvoice3-local"
+    return engine
+
+
 def load_existing_manifest(path: Path) -> dict:
     if not path.exists():
         return {"version": 1, "entries": {}}
@@ -135,6 +152,12 @@ def parse_arguments() -> argparse.Namespace:
         "--force",
         action="store_true",
         help="Regenerate files even if they already exist.",
+    )
+    parser.add_argument(
+        "--engine",
+        choices=["qwen", "cosyvoice"],
+        default="qwen",
+        help="TTS engine to use for generation.",
     )
     parser.add_argument(
         "--limit",
@@ -172,8 +195,9 @@ def main() -> None:
     if not cards:
         raise RuntimeError("No valid cards were found in the input file.")
 
-    runtime = QwenTTSRuntime()
+    runtime = create_tts_runtime(args.engine)
     runtime.load_model()
+    engine_name = get_engine_manifest_name(args.engine)
 
     existing_manifest = load_existing_manifest(manifest_path)
     entries = dict(existing_manifest.get("entries", {}))
@@ -208,19 +232,19 @@ def main() -> None:
             "translation": card.translation,
             "text": card.hanzi,
             "generatedAt": datetime.now(timezone.utc).isoformat(),
-            "engine": "qwen3-tts-local",
+            "engine": engine_name,
             "modelId": runtime.settings.model_id,
             "mode": runtime.model_mode,
-            "speaker": runtime.get_selected_speaker() if runtime.model_mode == "custom_voice" else None,
+            "speaker": runtime.get_selected_speaker(),
         }
 
     manifest = {
         "version": 1,
         "generatedAt": datetime.now(timezone.utc).isoformat(),
-        "engine": "qwen3-tts-local",
+        "engine": engine_name,
         "modelId": runtime.settings.model_id,
         "mode": runtime.model_mode,
-        "speaker": runtime.get_selected_speaker() if runtime.model_mode == "custom_voice" else None,
+        "speaker": runtime.get_selected_speaker(),
         "sourceFile": str(input_path),
         "entries": entries,
         "stats": {

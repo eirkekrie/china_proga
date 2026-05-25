@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { HandwritingAnswerState } from "@/components/hanzi-handwriting-answer";
 import { HanziSimilarityAnswer } from "@/components/hanzi-similarity-answer";
 import { useStudy } from "@/context/study-context";
-import { cardAudioEngine } from "@/lib/audio";
+import { cardAudioEngine, preloadCardAudioManifest } from "@/lib/audio";
 import { STAGE_LABELS, STAGE_SHORT_LABELS, UNASSIGNED_LESSON_ID } from "@/lib/constants";
 import { getEffectiveCardState } from "@/lib/learning";
 import { compareAnswer, formatDuration, shuffleArray } from "@/lib/utils";
@@ -56,6 +56,18 @@ function buildOptions(cards: Card[], currentCard: DerivedCard, mode: LearningSta
 
 function hasHintUsed(hints: HintFlags) {
   return hints.pinyin || hints.audio;
+}
+
+function getAudioFailureMessage(reason?: "manifest_missing" | "entry_missing" | "playback_failed") {
+  if (reason === "manifest_missing") {
+    return "Не удалось загрузить manifest.json с предзаписанной озвучкой. Проверьте /audio/cards/manifest.json и перезагрузите страницу.";
+  }
+
+  if (reason === "playback_failed") {
+    return "Wav-файл найден, но браузер не смог его воспроизвести. Попробуйте нажать ещё раз или перезагрузить страницу.";
+  }
+
+  return "Для этой карточки не найден предзаписанный wav-файл. Сгенерируйте аудио через scripts/generate_card_audio.py.";
 }
 
 function getVisibleLessonTitle(card: DerivedCard) {
@@ -183,6 +195,10 @@ export function TestSession() {
   }, [addStudyTime]);
 
   useEffect(() => {
+    preloadCardAudioManifest();
+  }, []);
+
+  useEffect(() => {
     const timer = window.setInterval(() => {
       if (!document.hidden) {
         addStudyTimeRef.current(1000);
@@ -224,9 +240,7 @@ export function TestSession() {
       return;
     }
 
-    setAudioNotice(
-      "Для этой карточки не найден предзаписанный wav-файл. Сгенерируйте аудио через scripts/generate_card_audio.py.",
-    );
+    setAudioNotice(getAudioFailureMessage(playback.failureReason));
   }
 
   function handleSubmit() {

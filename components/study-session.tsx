@@ -6,7 +6,7 @@ import { CopyButton } from "@/components/copy-button";
 import { HanziHandwritingAnswer } from "@/components/hanzi-handwriting-answer";
 import { HanziWritingPractice } from "@/components/hanzi-writing-practice";
 import { useStudy } from "@/context/study-context";
-import { cardAudioEngine } from "@/lib/audio";
+import { cardAudioEngine, preloadCardAudioManifest } from "@/lib/audio";
 import {
   ALL_LESSONS_ID,
   LEARN_ROTATION_WINDOW,
@@ -84,6 +84,18 @@ function getPrompt(card: DerivedCard) {
 
 function hasHintUsed(hints: HintFlags) {
   return hints.pinyin || hints.audio;
+}
+
+function getAudioFailureMessage(reason?: "manifest_missing" | "entry_missing" | "playback_failed") {
+  if (reason === "manifest_missing") {
+    return "Не удалось загрузить manifest.json с предзаписанной озвучкой. Проверьте /audio/cards/manifest.json и перезагрузите страницу.";
+  }
+
+  if (reason === "playback_failed") {
+    return "Wav-файл найден, но браузер не смог его воспроизвести. Попробуйте нажать ещё раз или перезагрузить страницу.";
+  }
+
+  return "Для этой карточки не найден предзаписанный wav-файл. Сгенерируйте аудио через scripts/generate_card_audio.py.";
 }
 
 function getVisibleLessonTitle(card: DerivedCard) {
@@ -233,6 +245,10 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
     };
   }, []);
 
+  useEffect(() => {
+    preloadCardAudioManifest();
+  }, []);
+
   function markHintUsed(kind: keyof HintFlags) {
     setHintFlags((previous) => {
       if (previous[kind]) {
@@ -270,9 +286,7 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
       return;
     }
 
-    setAudioNotice(
-      "Для этой карточки не найден предзаписанный wav-файл. Сгенерируйте аудио через scripts/generate_card_audio.py.",
-    );
+    setAudioNotice(getAudioFailureMessage(playback.failureReason));
   }
 
   function recordHistory(card: DerivedCard, grade: StudyHistoryEntry["grade"]) {
