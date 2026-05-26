@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useRef } from "react";
 import type { ComponentType, ReactNode } from "react";
 import {
   BarChart3,
@@ -45,20 +44,49 @@ const navItems: NavItem[] = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const lessonScrollerRef = useRef<HTMLDivElement | null>(null);
   const { authUser, availableLessons, cards, hydrated, metrics, selectedLessonId, setSelectedLessonId, stats } = useStudy();
 
   const dueTodayLabel = hydrated ? String(metrics.dueTodayCount) : "...";
   const progressLabel = hydrated ? `${metrics.progressPercent}%` : "...";
   const sessionLabel = hydrated ? formatDuration(stats.sessionStudyTime) : "...";
-  const allLessonsActive = selectedLessonId === ALL_LESSONS_ID;
   const unassignedCards = cards.filter((card) => card.lessonId === UNASSIGNED_LESSON_ID);
-  const unassignedActive = selectedLessonId === UNASSIGNED_LESSON_ID;
-  function scrollLessons(direction: -1 | 1) {
-    lessonScrollerRef.current?.scrollBy({
-      left: direction * 360,
-      behavior: "smooth",
-    });
+  const lessonOptions = [
+    {
+      id: ALL_LESSONS_ID,
+      title: "Все уроки",
+      count: cards.length,
+      meta: hydrated ? `${metrics.progressPercent}% освоено · ${metrics.dueTodayCount} к повтору` : "",
+    },
+    ...(unassignedCards.length > 0
+      ? [
+          {
+            id: UNASSIGNED_LESSON_ID,
+            title: UNASSIGNED_LESSON_TITLE,
+            count: unassignedCards.length,
+            meta: `${unassignedCards.length} карточек`,
+          },
+        ]
+      : []),
+    ...availableLessons.map((lesson) => ({
+      id: lesson.id,
+      title: lesson.title,
+      count: lesson.count,
+      meta: `${lesson.progressPercent}% освоено · ${lesson.reviewCount} к повтору`,
+    })),
+  ];
+  const selectedLessonIndex = Math.max(
+    0,
+    lessonOptions.findIndex((lesson) => lesson.id === selectedLessonId),
+  );
+  const selectedLesson = lessonOptions[selectedLessonIndex] ?? lessonOptions[0];
+
+  function changeLesson(direction: -1 | 1) {
+    if (lessonOptions.length <= 1) {
+      return;
+    }
+
+    const nextIndex = (selectedLessonIndex + direction + lessonOptions.length) % lessonOptions.length;
+    setSelectedLessonId(lessonOptions[nextIndex].id);
   }
 
   if (hydrated && !authUser) {
@@ -163,64 +191,50 @@ export function AppShell({ children }: { children: ReactNode }) {
       </aside>
 
       <main className="app-main">
-        <section className="lesson-rail mb-6">
-          <div className="lesson-rail-label">
-            <Library size={14} />
-            <span>Уроки</span>
-          </div>
-          <button
-            type="button"
-            className="lesson-scroll-button"
-            aria-label="Прокрутить уроки влево"
-            onClick={() => scrollLessons(-1)}
-          >
-            <ChevronLeft size={16} />
-          </button>
-          <div ref={lessonScrollerRef} className="thin-scrollbar lesson-scroller">
-            <button
-              type="button"
-              disabled={!hydrated}
-              className={["lesson-chip", allLessonsActive ? "is-active" : ""].join(" ")}
-              onClick={() => setSelectedLessonId(ALL_LESSONS_ID)}
-            >
-              Все уроки
-              <strong>{hydrated ? cards.length : "..."}</strong>
-              <small>{hydrated ? `${metrics.progressPercent}% · ${metrics.dueTodayCount} к повтору` : ""}</small>
-            </button>
-            <button
-              type="button"
-              disabled={!hydrated || unassignedCards.length === 0}
-              className={["lesson-chip", unassignedActive ? "is-active" : ""].join(" ")}
-              onClick={() => setSelectedLessonId(UNASSIGNED_LESSON_ID)}
-            >
-              {UNASSIGNED_LESSON_TITLE}
-              <strong>{hydrated ? unassignedCards.length : "..."}</strong>
-              <small>{hydrated ? `${unassignedCards.length} карточек` : ""}</small>
-            </button>
-            {availableLessons.map((lesson) => (
-              <button
-                key={lesson.id}
-                type="button"
+        <section className="lesson-selector mb-6">
+          <div className="lesson-selector-main">
+            <div className="lesson-selector-label">
+              <Library size={14} />
+              <span>Текущий урок</span>
+            </div>
+            <div className="lesson-select-field">
+              <select
+                value={selectedLesson?.id ?? ALL_LESSONS_ID}
                 disabled={!hydrated}
-                className={["lesson-chip", selectedLessonId === lesson.id ? "is-active" : ""].join(" ")}
-                onClick={() => setSelectedLessonId(lesson.id)}
+                className="lesson-select"
+                onChange={(event) => setSelectedLessonId(event.target.value)}
               >
-                {lesson.title}
-                <strong>{lesson.count}</strong>
-                <small>
-                  {lesson.progressPercent}% · {lesson.newCount} новых · {lesson.reviewCount} к повтору
-                </small>
-              </button>
-            ))}
+                {lessonOptions.map((lesson) => (
+                  <option key={lesson.id} value={lesson.id}>
+                    {lesson.title} · {lesson.count}
+                  </option>
+                ))}
+              </select>
+              <p>{hydrated ? selectedLesson?.meta : "Загружаю уроки..."}</p>
+            </div>
           </div>
-          <button
-            type="button"
-            className="lesson-scroll-button"
-            aria-label="Прокрутить уроки вправо"
-            onClick={() => scrollLessons(1)}
-          >
-            <ChevronRight size={16} />
-          </button>
+          <div className="lesson-nav-buttons">
+            <button type="button" aria-label="Предыдущий урок" disabled={!hydrated} onClick={() => changeLesson(-1)}>
+              <ChevronLeft size={16} />
+            </button>
+            <button type="button" aria-label="Следующий урок" disabled={!hydrated} onClick={() => changeLesson(1)}>
+              <ChevronRight size={16} />
+            </button>
+          </div>
+          <div className="lesson-metric-strip">
+            <span className="lesson-metric-pill">
+              <small>Карточек</small>
+              <strong>{hydrated ? metrics.totalCards : "..."}</strong>
+            </span>
+            <span className="lesson-metric-pill">
+              <small>Прогресс</small>
+              <strong>{hydrated ? `${metrics.progressPercent}%` : "..."}</strong>
+            </span>
+            <span className="lesson-metric-pill">
+              <small>К повтору</small>
+              <strong>{hydrated ? metrics.dueTodayCount : "..."}</strong>
+            </span>
+          </div>
         </section>
 
         {children}
