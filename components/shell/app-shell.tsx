@@ -41,8 +41,6 @@ const navItems: NavItem[] = [
   { href: "/stats", label: "Аналитика", shortLabel: "Статы", icon: TrendingUp },
 ];
 
-const androidNavItems = navItems.filter((item) => ["/", "/learn", "/review", "/test", "/cards"].includes(item.href));
-
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const lessonScrollerRef = useRef<HTMLDivElement | null>(null);
@@ -54,16 +52,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   const allLessonsActive = selectedLessonId === ALL_LESSONS_ID;
   const unassignedCards = cards.filter((card) => card.lessonId === UNASSIGNED_LESSON_ID);
   const unassignedActive = selectedLessonId === UNASSIGNED_LESSON_ID;
-  const selectedLesson =
-    selectedLessonId === ALL_LESSONS_ID
-      ? null
-      : selectedLessonId === UNASSIGNED_LESSON_ID
-        ? { title: UNASSIGNED_LESSON_TITLE, count: unassignedCards.length, progressPercent: 0 }
-        : availableLessons.find((lesson) => lesson.id === selectedLessonId);
-  const androidLessonTitle = selectedLesson?.title ?? "Все уроки";
-  const androidLessonCount = selectedLesson?.count ?? cards.length;
-  const androidLessonProgress = selectedLesson?.progressPercent ?? metrics.progressPercent;
-
   function scrollLessons(direction: -1 | 1) {
     lessonScrollerRef.current?.scrollBy({
       left: direction * 360,
@@ -162,19 +150,6 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <div className="android-topbar">
-        <div>
-          <Link href="/" className="android-brand">
-            Hanzi Flow
-          </Link>
-          <p>{androidLessonTitle}</p>
-        </div>
-        <div className="android-topbar-stats">
-          <span>{androidLessonCount} карт.</span>
-          <strong>{androidLessonProgress}%</strong>
-        </div>
-      </div>
-
       <main className="app-main">
         <section className="lesson-rail mb-6">
           <div className="lesson-rail-label">
@@ -239,16 +214,6 @@ export function AppShell({ children }: { children: ReactNode }) {
         {children}
       </main>
 
-      <nav className="android-bottom-nav" aria-label="Основная навигация">
-        {androidNavItems.map((item) => {
-          const active = pathname === item.href;
-          return (
-            <Link key={item.href} href={item.href} className={active ? "is-active" : ""}>
-              {item.shortLabel ?? item.label}
-            </Link>
-          );
-        })}
-      </nav>
     </div>
   );
 }
