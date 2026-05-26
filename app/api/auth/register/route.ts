@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { AUTH_COOKIE_NAME, authCookieOptions } from "@/lib/auth";
+import { AUTH_COOKIE_NAME, getAuthCookieOptions } from "@/lib/auth";
 import { copyLegacyStateToUser, createSession, createUser, getUserCount } from "@/lib/sqlite-state";
 
 export const dynamic = "force-dynamic";
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
 
     const session = createSession(user.id);
     const response = NextResponse.json({ user }, { status: 201 });
-    response.cookies.set(AUTH_COOKIE_NAME, session.id, authCookieOptions);
+    response.cookies.set(AUTH_COOKIE_NAME, session.id, getAuthCookieOptions(request));
     return response;
   } catch {
     return NextResponse.json({ error: "Не удалось создать аккаунт." }, { status: 400 });

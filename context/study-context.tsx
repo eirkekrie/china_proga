@@ -421,10 +421,11 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     const response = await fetch("/api/state", {
       method: "GET",
       cache: "no-store",
+      credentials: "same-origin",
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to load state: ${response.status}`);
+      throw new Error(response.status === 401 ? "SESSION_NOT_SAVED" : `STATE_LOAD_FAILED_${response.status}`);
     }
 
     const loaded = normalizePersistedState((await response.json()) as Partial<PersistedAppState>);
@@ -441,6 +442,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     try {
       const response = await fetch(path, {
         method: "POST",
+        credentials: "same-origin",
         headers: {
           "Content-Type": "application/json",
         },
@@ -454,7 +456,14 @@ export function StudyProvider({ children }: { children: ReactNode }) {
 
       await loadStateForAuthenticatedUser(body.user);
       return { ok: true };
-    } catch {
+    } catch (error) {
+      if (error instanceof Error && error.message === "SESSION_NOT_SAVED") {
+        return {
+          ok: false,
+          error: "Вход прошел, но браузер не сохранил сессию. Проверьте HTTPS или перезапустите сервер с новой сборкой.",
+        };
+      }
+
       return { ok: false, error: "Сервер авторизации недоступен." };
     }
   }
@@ -470,6 +479,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
   async function logout() {
     await fetch("/api/auth/logout", {
       method: "POST",
+      credentials: "same-origin",
     }).catch(() => undefined);
     setAuthUser(null);
     setSelectedLessonId(ALL_LESSONS_ID);
