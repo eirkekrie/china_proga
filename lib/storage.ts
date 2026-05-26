@@ -8,27 +8,13 @@
 } from "@/lib/fsrs";
 import { STARTER_CARD_LINES, STORAGE_KEY, UNASSIGNED_LESSON_ID, UNASSIGNED_LESSON_TITLE } from "@/lib/constants";
 import { parseCardLines } from "@/lib/parser";
-import type {
-  AccountStudyState,
-  Card,
-  StudyAccount,
-  StudyActivityKind,
-  StudySessionLogEntry,
-  StudyStats,
-  ThemeMode,
-} from "@/lib/types";
+import type { Card, StudyActivityKind, StudySessionLogEntry, StudyStats, ThemeMode } from "@/lib/types";
 
 export type PersistedAppState = {
   cards: Card[];
   stats: StudyStats;
-  accounts: StudyAccount[];
-  activeAccountId: string;
-  accountStates: Record<string, AccountStudyState>;
   theme: ThemeMode;
 };
-
-export const DEFAULT_ACCOUNT_ID = "account-default";
-export const DEFAULT_ACCOUNT_NAME = "Основной";
 
 export function createDefaultStats(): StudyStats {
   return {
@@ -42,17 +28,6 @@ export function createDefaultStats(): StudyStats {
     lastStudyDate: null,
     dailyStudyLog: {},
     studySessions: [],
-  };
-}
-
-export function createDefaultAccount(now = new Date()): StudyAccount {
-  const timestamp = now.toISOString();
-
-  return {
-    id: DEFAULT_ACCOUNT_ID,
-    name: DEFAULT_ACCOUNT_NAME,
-    createdAt: timestamp,
-    updatedAt: timestamp,
   };
 }
 
@@ -79,26 +54,6 @@ function sanitizeDailyStudyLog(raw: unknown): Record<string, number> {
       .filter(([key, value]) => /^\d{4}-\d{2}-\d{2}$/.test(key) && Number.isFinite(value) && value > 0)
       .map(([key, value]) => [key, Math.round(value)]),
   );
-}
-
-function sanitizeDate(value: unknown, fallback: string) {
-  return typeof value === "string" && !Number.isNaN(new Date(value).getTime()) ? value : fallback;
-}
-
-function sanitizeAccount(raw: Partial<StudyAccount> | undefined, index: number, now: Date): StudyAccount | null {
-  const fallbackTimestamp = now.toISOString();
-  const id = typeof raw?.id === "string" && raw.id.trim() ? raw.id.trim() : `account-${index + 1}`;
-
-  if (!id) {
-    return null;
-  }
-
-  return {
-    id,
-    name: typeof raw?.name === "string" && raw.name.trim() ? raw.name.trim() : `Аккаунт ${index + 1}`,
-    createdAt: sanitizeDate(raw?.createdAt, fallbackTimestamp),
-    updatedAt: sanitizeDate(raw?.updatedAt, fallbackTimestamp),
-  };
 }
 
 function sanitizeStudySession(raw: Partial<StudySessionLogEntry> | undefined, index: number): StudySessionLogEntry | null {
@@ -219,94 +174,59 @@ export function sanitizeStats(raw: Partial<StudyStats> | undefined): StudyStats 
   };
 }
 
-function sanitizeAccountStudyState(
-  raw: Partial<AccountStudyState> | undefined,
-  fallback: AccountStudyState,
-): AccountStudyState {
-  const cards = Array.isArray(raw?.cards)
-    ? raw.cards.map((card) => sanitizeCard(card as Partial<Card> & { currentStage?: string }))
-    : fallback.cards;
-
-  return {
-    cards,
-    stats: sanitizeStats(raw?.stats ?? fallback.stats),
-  };
-}
-
 export function createSeedState(): PersistedAppState {
   const parsed = parseCardLines(STARTER_CARD_LINES);
-  const account = createDefaultAccount();
-  const accountState = {
-    cards: parsed.cards,
-    stats: createDefaultStats(),
-  };
 
   return {
-    cards: accountState.cards,
-    stats: accountState.stats,
-    accounts: [account],
-    activeAccountId: account.id,
-    accountStates: {
-      [account.id]: accountState,
-    },
+    cards: parsed.cards,
+    stats: createDefaultStats(),
     theme: "dark",
   };
 }
 
-export function normalizePersistedState(raw: Partial<PersistedAppState> | undefined): PersistedAppState {
+type LegacyAccountStudyState = {
+  cards?: unknown;
+  stats?: Partial<StudyStats>;
+};
+
+type LegacyAccountState = Partial<PersistedAppState> & {
+  activeAccountId?: unknown;
+  accountStates?: Record<string, LegacyAccountStudyState | undefined>;
+};
+
+function unwrapLegacyAccountState(raw: Partial<PersistedAppState> | LegacyAccountState | undefined) {
+  if (
+    raw &&
+    typeof (raw as LegacyAccountState).activeAccountId === "string" &&
+    (raw as LegacyAccountState).accountStates &&
+    typeof (raw as LegacyAccountState).accountStates === "object"
+  ) {
+    const activeAccountId = (raw as LegacyAccountState).activeAccountId as string;
+    const activeState = (raw as LegacyAccountState).accountStates?.[activeAccountId];
+
+    if (activeState) {
+      return {
+        ...raw,
+        cards: activeState.cards,
+        stats: activeState.stats,
+      } as Partial<PersistedAppState>;
+    }
+  }
+
+  return raw as Partial<PersistedAppState> | undefined;
+}
+
+export function normalizePersistedState(rawInput: Partial<PersistedAppState> | LegacyAccountState | undefined): PersistedAppState {
   const fallback = createSeedState();
-  const now = new Date();
-  const legacyState = {
-    cards: Array.isArray(raw?.cards)
+  const raw = unwrapLegacyAccountState(rawInput);
+  const cards =
+    Array.isArray(raw?.cards) && raw.cards.length > 0
       ? raw.cards.map((card) => sanitizeCard(card as Partial<Card> & { currentStage?: string }))
-      : fallback.cards,
-    stats: sanitizeStats(raw?.stats),
-  };
-  const rawAccounts = Array.isArray(raw?.accounts) ? raw.accounts : [];
-  const seenAccountIds = new Set<string>();
-  const accounts = rawAccounts
-    .map((account, index) => sanitizeAccount(account as Partial<StudyAccount>, index, now))
-    .filter((account): account is StudyAccount => Boolean(account))
-    .filter((account) => {
-      if (seenAccountIds.has(account.id)) {
-        return false;
-      }
-
-      seenAccountIds.add(account.id);
-      return true;
-    });
-
-  if (accounts.length === 0) {
-    accounts.push(createDefaultAccount(now));
-  }
-
-  const activeAccountId =
-    typeof raw?.activeAccountId === "string" && accounts.some((account) => account.id === raw.activeAccountId)
-      ? raw.activeAccountId
-      : accounts[0].id;
-  const rawAccountStates =
-    raw?.accountStates && typeof raw.accountStates === "object"
-      ? (raw.accountStates as Record<string, Partial<AccountStudyState> | undefined>)
-      : {};
-  const accountStates: Record<string, AccountStudyState> = {};
-
-  accounts.forEach((account) => {
-    const fallbackState = account.id === activeAccountId ? legacyState : { cards: fallback.cards, stats: createDefaultStats() };
-    accountStates[account.id] = sanitizeAccountStudyState(rawAccountStates[account.id], fallbackState);
-  });
-
-  if (Array.isArray(raw?.cards) || raw?.stats) {
-    accountStates[activeAccountId] = legacyState;
-  }
-
-  const activeState = accountStates[activeAccountId] ?? legacyState;
+      : fallback.cards;
 
   return {
-    cards: activeState.cards,
-    stats: activeState.stats,
-    accounts,
-    activeAccountId,
-    accountStates,
+    cards,
+    stats: sanitizeStats(raw?.stats),
     theme: raw?.theme === "light" ? "light" : "dark",
   };
 }

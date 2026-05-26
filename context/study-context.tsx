@@ -1,12 +1,12 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode, SetStateAction } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { applyReview, buildStudyQueue, computeDashboard, getEffectiveCardState, resetCardProgress } from "@/lib/learning";
 import { parseCardLines } from "@/lib/parser";
 import { ALL_LESSONS_ID, UNASSIGNED_LESSON_ID } from "@/lib/constants";
 import {
-  createDefaultStats,
+  createSeedState,
   loadPersistedState,
   normalizePersistedState,
   savePersistedState,
@@ -14,7 +14,7 @@ import {
 } from "@/lib/storage";
 import { dayKey } from "@/lib/utils";
 import type {
-  AccountStudyState,
+  AuthUser,
   Card,
   DashboardMetrics,
   DerivedCard,
@@ -22,7 +22,6 @@ import type {
   LessonSummary,
   ParseResult,
   ReviewGrade,
-  StudyAccount,
   StudySessionInput,
   StudySessionLogEntry,
   StudyFlow,
@@ -31,10 +30,13 @@ import type {
   ThemeMode,
 } from "@/lib/types";
 
+type AuthResult = {
+  ok: boolean;
+  error?: string;
+};
+
 type StudyContextValue = {
-  accounts: StudyAccount[];
-  activeAccount: StudyAccount;
-  activeAccountId: string;
+  authUser: AuthUser | null;
   cards: Card[];
   filteredCards: Card[];
   availableLessons: LessonSummary[];
@@ -43,9 +45,9 @@ type StudyContextValue = {
   theme: ThemeMode;
   hydrated: boolean;
   metrics: DashboardMetrics;
-  createAccount: (name?: string) => StudyAccount;
-  switchAccount: (accountId: string) => boolean;
-  deleteAccount: (accountId: string) => boolean;
+  login: (email: string, password: string) => Promise<AuthResult>;
+  register: (name: string, email: string, password: string) => Promise<AuthResult>;
+  logout: () => Promise<void>;
   setSelectedLessonId: (lessonId: string) => void;
   setTheme: (theme: ThemeMode) => void;
   importCards: (rawText: string) => ParseResult;
@@ -132,29 +134,6 @@ function buildAvailableLessons(cards: Card[]): LessonSummary[] {
       progressPercent: lesson.count > 0 ? Math.round(lesson.progressPercent / lesson.count) : 0,
     }))
     .sort(sortLessons);
-}
-
-function shouldPreferCachedState(cached: PersistedAppState, remote: PersistedAppState) {
-  if (cached.accounts.length !== remote.accounts.length) {
-    return cached.accounts.length > remote.accounts.length;
-  }
-
-  const cachedPracticedCards = cached.cards.filter((card) => card.repetitions > 0 || card.status !== "new").length;
-  const remotePracticedCards = remote.cards.filter((card) => card.repetitions > 0 || card.status !== "new").length;
-
-  if (cached.cards.length !== remote.cards.length) {
-    return cached.cards.length > remote.cards.length;
-  }
-
-  if (cached.stats.totalReviews !== remote.stats.totalReviews) {
-    return cached.stats.totalReviews > remote.stats.totalReviews;
-  }
-
-  if (cached.stats.totalStudyTime !== remote.stats.totalStudyTime) {
-    return cached.stats.totalStudyTime > remote.stats.totalStudyTime;
-  }
-
-  return cachedPracticedCards > remotePracticedCards;
 }
 
 const STUDY_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -285,59 +264,9 @@ function removeStudySession(stats: StudyStats, session: StudySessionLogEntry, no
   );
 }
 
-function getActiveAccount(state: PersistedAppState): StudyAccount {
-  return (
-    state.accounts.find((account) => account.id === state.activeAccountId) ??
-    state.accounts[0] ?? {
-      id: "account-default",
-      name: "Основной",
-      createdAt: new Date(0).toISOString(),
-      updatedAt: new Date(0).toISOString(),
-    }
-  );
-}
-
-function getAccountStudyState(state: PersistedAppState, accountId: string): AccountStudyState | null {
-  return state.accountStates[accountId] ?? null;
-}
-
-function syncActiveAccountState(state: PersistedAppState): PersistedAppState {
-  return {
-    ...state,
-    accountStates: {
-      ...state.accountStates,
-      [state.activeAccountId]: {
-        cards: state.cards,
-        stats: state.stats,
-      },
-    },
-  };
-}
-
-function createAccountId(accounts: StudyAccount[]) {
-  const existingIds = new Set(accounts.map((account) => account.id));
-  let id = `account-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-
-  while (existingIds.has(id)) {
-    id = `account-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-  }
-
-  return id;
-}
-
-function createFreshAccountCards(cards: Card[], now: Date) {
-  return cards.map((card) => resetCardProgress(card, now));
-}
-
 export function StudyProvider({ children }: { children: ReactNode }) {
-  const [state, setRawState] = useState<PersistedAppState>(loadPersistedState());
-  const setState = useCallback((action: SetStateAction<PersistedAppState>) => {
-    setRawState((previous) => {
-      const nextState =
-        typeof action === "function" ? (action as (previous: PersistedAppState) => PersistedAppState)(previous) : action;
-      return syncActiveAccountState(nextState);
-    });
-  }, []);
+  const [state, setState] = useState<PersistedAppState>(loadPersistedState());
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [selectedLessonId, setSelectedLessonId] = useState(ALL_LESSONS_ID);
   const [hydrated, setHydrated] = useState(false);
   const persistedJsonRef = useRef<string>("");
@@ -348,6 +277,12 @@ export function StudyProvider({ children }: { children: ReactNode }) {
 
     async function hydrate() {
       if (!SERVER_STATE_ENABLED) {
+        setAuthUser({
+          id: "local",
+          email: "local@hanzi-flow.app",
+          name: "Локальный режим",
+          createdAt: new Date().toISOString(),
+        });
         persistedJsonRef.current = JSON.stringify(cached);
         setState({
           ...cached,
@@ -358,31 +293,52 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        const response = await fetch("/api/state", {
+        const userResponse = await fetch("/api/auth/me", {
           method: "GET",
           cache: "no-store",
         });
 
-        if (!response.ok) {
-          throw new Error(`Failed to load state: ${response.status}`);
+        if (!userResponse.ok) {
+          if (!active) {
+            return;
+          }
+
+          setAuthUser(null);
+          persistedJsonRef.current = JSON.stringify(cached);
+          setState({
+            ...cached,
+            stats: normalizeStatsForToday(cached.stats, new Date()),
+          });
+          return;
         }
 
-        const loaded = normalizePersistedState((await response.json()) as Partial<PersistedAppState>);
+        const { user } = (await userResponse.json()) as { user: AuthUser };
+        const stateResponse = await fetch("/api/state", {
+          method: "GET",
+          cache: "no-store",
+        });
+
+        if (!stateResponse.ok) {
+          throw new Error(`Failed to load state: ${stateResponse.status}`);
+        }
+
+        const loaded = normalizePersistedState((await stateResponse.json()) as Partial<PersistedAppState>);
         if (!active) {
           return;
         }
 
-        const preferred = shouldPreferCachedState(cached, loaded) ? cached : loaded;
-        persistedJsonRef.current = JSON.stringify(preferred);
+        setAuthUser(user);
+        persistedJsonRef.current = JSON.stringify(loaded);
         setState({
-          ...preferred,
-          stats: normalizeStatsForToday(preferred.stats, new Date()),
+          ...loaded,
+          stats: normalizeStatsForToday(loaded.stats, new Date()),
         });
       } catch {
         if (!active) {
           return;
         }
 
+        setAuthUser(null);
         persistedJsonRef.current = JSON.stringify(cached);
         setState({
           ...cached,
@@ -403,7 +359,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!hydrated) {
+    if (!hydrated || !authUser) {
       return;
     }
 
@@ -428,13 +384,12 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     }).catch(() => {
       persistedJsonRef.current = "";
     });
-  }, [hydrated, state]);
+  }, [authUser, hydrated, state]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", state.theme === "dark");
   }, [state.theme]);
 
-  const activeAccount = useMemo(() => getActiveAccount(state), [state]);
   const availableLessons = useMemo(() => buildAvailableLessons(state.cards), [state.cards]);
   const filteredCards = useMemo(
     () =>
@@ -462,94 +417,64 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     }));
   }
 
-  function createAccount(name?: string) {
-    const now = new Date();
-    const accountName = name?.trim() || `Аккаунт ${state.accounts.length + 1}`;
-    const createdAccount: StudyAccount = {
-      id: createAccountId(state.accounts),
-      name: accountName,
-      createdAt: now.toISOString(),
-      updatedAt: now.toISOString(),
-    };
+  async function loadStateForAuthenticatedUser(user: AuthUser) {
+    const response = await fetch("/api/state", {
+      method: "GET",
+      cache: "no-store",
+    });
 
+    if (!response.ok) {
+      throw new Error(`Failed to load state: ${response.status}`);
+    }
+
+    const loaded = normalizePersistedState((await response.json()) as Partial<PersistedAppState>);
+    persistedJsonRef.current = JSON.stringify(loaded);
+    setAuthUser(user);
     setSelectedLessonId(ALL_LESSONS_ID);
-    setState((previous) => {
-      const accountState = {
-        cards: createFreshAccountCards(previous.cards, now),
-        stats: createDefaultStats(),
-      };
+    setState({
+      ...loaded,
+      stats: normalizeStatsForToday(loaded.stats, new Date()),
+    });
+  }
 
-      return {
-        ...previous,
-        accounts: [...previous.accounts, createdAccount],
-        activeAccountId: createdAccount.id,
-        accountStates: {
-          ...previous.accountStates,
-          [createdAccount.id]: accountState,
+  async function submitAuth(path: "/api/auth/login" | "/api/auth/register", payload: Record<string, string>) {
+    try {
+      const response = await fetch(path, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-        cards: accountState.cards,
-        stats: accountState.stats,
-      };
-    });
+        body: JSON.stringify(payload),
+      });
+      const body = (await response.json()) as { user?: AuthUser; error?: string };
 
-    return createdAccount;
-  }
-
-  function switchAccount(accountId: string) {
-    if (accountId === state.activeAccountId) {
-      return true;
-    }
-
-    if (!state.accounts.some((account) => account.id === accountId)) {
-      return false;
-    }
-
-    setSelectedLessonId(ALL_LESSONS_ID);
-    setState((previous) => {
-      const accountState = getAccountStudyState(previous, accountId);
-
-      if (!accountState) {
-        return previous;
+      if (!response.ok || !body.user) {
+        return { ok: false, error: body.error ?? "Не удалось войти в аккаунт." };
       }
 
-      return {
-        ...previous,
-        activeAccountId: accountId,
-        cards: accountState.cards,
-        stats: normalizeStatsForToday(accountState.stats, new Date()),
-      };
-    });
-
-    return true;
+      await loadStateForAuthenticatedUser(body.user);
+      return { ok: true };
+    } catch {
+      return { ok: false, error: "Сервер авторизации недоступен." };
+    }
   }
 
-  function deleteAccount(accountId: string) {
-    if (state.accounts.length <= 1 || !state.accounts.some((account) => account.id === accountId)) {
-      return false;
-    }
+  function login(email: string, password: string) {
+    return submitAuth("/api/auth/login", { email, password });
+  }
 
+  function register(name: string, email: string, password: string) {
+    return submitAuth("/api/auth/register", { name, email, password });
+  }
+
+  async function logout() {
+    await fetch("/api/auth/logout", {
+      method: "POST",
+    }).catch(() => undefined);
+    setAuthUser(null);
     setSelectedLessonId(ALL_LESSONS_ID);
-    setState((previous) => {
-      if (previous.accounts.length <= 1 || !previous.accounts.some((account) => account.id === accountId)) {
-        return previous;
-      }
-
-      const accounts = previous.accounts.filter((account) => account.id !== accountId);
-      const { [accountId]: _removedAccountState, ...accountStates } = previous.accountStates;
-      const activeAccountId = previous.activeAccountId === accountId ? accounts[0].id : previous.activeAccountId;
-      const activeState = accountStates[activeAccountId] ?? { cards: previous.cards, stats: previous.stats };
-
-      return {
-        ...previous,
-        accounts,
-        activeAccountId,
-        accountStates,
-        cards: activeState.cards,
-        stats: normalizeStatsForToday(activeState.stats, new Date()),
-      };
-    });
-
-    return true;
+    setState(createSeedState());
+    persistedJsonRef.current = "";
   }
 
   function importCards(rawText: string) {
@@ -783,9 +708,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
   return (
     <StudyContext.Provider
       value={{
-        accounts: state.accounts,
-        activeAccount,
-        activeAccountId: state.activeAccountId,
+        authUser,
         cards: state.cards,
         filteredCards,
         availableLessons,
@@ -794,9 +717,9 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         theme: state.theme,
         hydrated,
         metrics,
-        createAccount,
-        switchAccount,
-        deleteAccount,
+        login,
+        register,
+        logout,
         setSelectedLessonId,
         setTheme,
         importCards,

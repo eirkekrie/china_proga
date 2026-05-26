@@ -19,7 +19,8 @@ import {
   Timer,
   TrendingUp,
 } from "lucide-react";
-import { AccountSwitcher } from "@/components/account-switcher";
+import { AccountMenu } from "@/components/account-menu";
+import { AuthPanel } from "@/components/auth-panel";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useStudy } from "@/context/study-context";
 import { ALL_LESSONS_ID, UNASSIGNED_LESSON_ID, UNASSIGNED_LESSON_TITLE } from "@/lib/constants";
@@ -45,7 +46,7 @@ const navItems: NavItem[] = [
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const lessonScrollerRef = useRef<HTMLDivElement | null>(null);
-  const { availableLessons, cards, hydrated, metrics, selectedLessonId, setSelectedLessonId, stats } = useStudy();
+  const { authUser, availableLessons, cards, hydrated, metrics, selectedLessonId, setSelectedLessonId, stats } = useStudy();
 
   const dueTodayLabel = hydrated ? String(metrics.dueTodayCount) : "...";
   const progressLabel = hydrated ? `${metrics.progressPercent}%` : "...";
@@ -58,6 +59,10 @@ export function AppShell({ children }: { children: ReactNode }) {
       left: direction * 360,
       behavior: "smooth",
     });
+  }
+
+  if (hydrated && !authUser) {
+    return <AuthPanel />;
   }
 
   return (
@@ -84,7 +89,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </div>
         <div className="px-4 pb-3">
-          <AccountSwitcher compact />
+          <AccountMenu />
         </div>
         <nav className="thin-scrollbar overflow-x-auto px-4 pb-3">
           <div className="flex min-w-max items-center gap-2">
@@ -125,7 +130,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             })}
           </nav>
           <div className="pt-3">
-            <AccountSwitcher />
+            <AccountMenu />
           </div>
         </div>
 

@@ -99,16 +99,11 @@ export type StudyStats = {
   studySessions: StudySessionLogEntry[];
 };
 
-export type StudyAccount = {
+export type AuthUser = {
   id: string;
+  email: string;
   name: string;
   createdAt: string;
-  updatedAt: string;
-};
-
-export type AccountStudyState = {
-  cards: Card[];
-  stats: StudyStats;
 };
 
 export type StudySessionLogEntry = {
