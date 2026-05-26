@@ -19,6 +19,7 @@ import {
   Timer,
   TrendingUp,
 } from "lucide-react";
+import { AccountSwitcher } from "@/components/account-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useStudy } from "@/context/study-context";
 import { ALL_LESSONS_ID, UNASSIGNED_LESSON_ID, UNASSIGNED_LESSON_TITLE } from "@/lib/constants";
@@ -82,6 +83,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             <ThemeToggle />
           </div>
         </div>
+        <div className="px-4 pb-3">
+          <AccountSwitcher compact />
+        </div>
         <nav className="thin-scrollbar overflow-x-auto px-4 pb-3">
           <div className="flex min-w-max items-center gap-2">
             {navItems.map((item) => {
@@ -120,6 +124,9 @@ export function AppShell({ children }: { children: ReactNode }) {
               );
             })}
           </nav>
+          <div className="pt-3">
+            <AccountSwitcher />
+          </div>
         </div>
 
         <div className="grid gap-4 border-t border-white/5 pt-5">

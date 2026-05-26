@@ -99,6 +99,18 @@ export type StudyStats = {
   studySessions: StudySessionLogEntry[];
 };
 
+export type StudyAccount = {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AccountStudyState = {
+  cards: Card[];
+  stats: StudyStats;
+};
+
 export type StudySessionLogEntry = {
   id: string;
   date: string;
