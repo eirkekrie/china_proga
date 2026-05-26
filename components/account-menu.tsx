@@ -17,7 +17,7 @@ export function AccountMenu() {
       </span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold">{authUser.name}</p>
-        <p className="truncate text-[11px] muted-text">{authUser.email}</p>
+        <p className="truncate text-[11px] muted-text">@{authUser.username}</p>
       </div>
       <button type="button" className="theme-toggle h-9 min-h-9 w-9" aria-label="Выйти" title="Выйти" onClick={logout}>
         <LogOut size={15} />

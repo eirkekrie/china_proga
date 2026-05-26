@@ -29,7 +29,8 @@ function getDatabase() {
 
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
-      email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+      username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+      email TEXT UNIQUE COLLATE NOCASE,
       name TEXT NOT NULL,
       password_hash TEXT NOT NULL,
       password_salt TEXT NOT NULL,
@@ -55,12 +56,14 @@ function getDatabase() {
     CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
   `);
+  migrateUsersTable(database);
 
   return database;
 }
 
 type UserRow = {
   id: string;
+  username: string;
   email: string;
   name: string;
   password_hash: string;
@@ -74,17 +77,42 @@ type SessionRow = {
   expires_at: string;
 };
 
-function toAuthUser(row: Pick<UserRow, "id" | "email" | "name" | "created_at">): AuthUser {
+function migrateUsersTable(db: DatabaseSync) {
+  const columns = db.prepare("PRAGMA table_info(users)").all() as Array<{ name: string }>;
+  const columnNames = new Set(columns.map((column) => column.name));
+
+  if (!columnNames.has("username")) {
+    db.exec("ALTER TABLE users ADD COLUMN username TEXT");
+    db.exec(`
+      UPDATE users
+      SET username = lower(
+        CASE
+          WHEN instr(email, '@') > 0 THEN substr(email, 1, instr(email, '@') - 1)
+          ELSE email
+        END
+      )
+      WHERE username IS NULL OR username = ''
+    `);
+  }
+
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username COLLATE NOCASE)");
+}
+
+function toAuthUser(row: Pick<UserRow, "id" | "username" | "name" | "created_at">): AuthUser {
   return {
     id: row.id,
-    email: row.email,
+    username: row.username,
     name: row.name,
     createdAt: row.created_at,
   };
 }
 
-function normalizeEmail(email: string) {
-  return email.trim().toLowerCase();
+function normalizeUsername(username: string) {
+  return username.trim().toLowerCase();
+}
+
+function createPlaceholderEmail(username: string) {
+  return `${normalizeUsername(username)}@users.hanzi-flow.local`;
 }
 
 function hashPassword(password: string, salt = randomBytes(16).toString("hex")) {
@@ -105,13 +133,13 @@ export function getUserCount() {
   return row.count;
 }
 
-export function findUserByEmail(email: string) {
-  const findStatement = getDatabase().prepare("SELECT * FROM users WHERE email = ?");
-  return findStatement.get(normalizeEmail(email)) as UserRow | undefined;
+export function findUserByUsername(username: string) {
+  const findStatement = getDatabase().prepare("SELECT * FROM users WHERE username = ?");
+  return findStatement.get(normalizeUsername(username)) as UserRow | undefined;
 }
 
-export function createUser(input: { email: string; name: string; password: string }) {
-  const existing = findUserByEmail(input.email);
+export function createUser(input: { username: string; name: string; password: string }) {
+  const existing = findUserByUsername(input.username);
 
   if (existing) {
     return null;
@@ -119,9 +147,11 @@ export function createUser(input: { email: string; name: string; password: strin
 
   const now = new Date().toISOString();
   const { hash, salt } = hashPassword(input.password);
+  const username = normalizeUsername(input.username);
   const user = {
     id: randomUUID(),
-    email: normalizeEmail(input.email),
+    username,
+    email: createPlaceholderEmail(username),
     name: input.name.trim(),
     password_hash: hash,
     password_salt: salt,
@@ -129,12 +159,13 @@ export function createUser(input: { email: string; name: string; password: strin
     updated_at: now,
   };
   const insertStatement = getDatabase().prepare(`
-    INSERT INTO users (id, email, name, password_hash, password_salt, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO users (id, username, email, name, password_hash, password_salt, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   insertStatement.run(
     user.id,
+    user.username,
     user.email,
     user.name,
     user.password_hash,
@@ -146,8 +177,8 @@ export function createUser(input: { email: string; name: string; password: strin
   return toAuthUser(user);
 }
 
-export function verifyUserCredentials(email: string, password: string) {
-  const user = findUserByEmail(email);
+export function verifyUserCredentials(username: string, password: string) {
+  const user = findUserByUsername(username);
 
   if (!user || !verifyPassword(password, user.password_hash, user.password_salt)) {
     return null;
@@ -187,7 +218,7 @@ export function getUserBySession(sessionId: string | undefined) {
       sessions.id,
       sessions.user_id,
       sessions.expires_at,
-      users.email,
+      users.username,
       users.name,
       users.created_at
     FROM sessions
@@ -195,7 +226,7 @@ export function getUserBySession(sessionId: string | undefined) {
     WHERE sessions.id = ?
   `);
   const row = findStatement.get(sessionId) as
-    | (SessionRow & Pick<UserRow, "email" | "name" | "created_at">)
+    | (SessionRow & Pick<UserRow, "username" | "name" | "created_at">)
     | undefined;
 
   if (!row) {
@@ -209,7 +240,7 @@ export function getUserBySession(sessionId: string | undefined) {
 
   return toAuthUser({
     id: row.user_id,
-    email: row.email,
+    username: row.username,
     name: row.name,
     created_at: row.created_at,
   });

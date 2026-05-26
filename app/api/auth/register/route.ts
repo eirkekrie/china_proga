@@ -4,17 +4,20 @@ import { copyLegacyStateToUser, createSession, createUser, getUserCount } from "
 
 export const dynamic = "force-dynamic";
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const USERNAME_PATTERN = /^[a-zA-Z0-9_-]{3,32}$/;
 
 export async function POST(request: Request) {
   try {
-    const payload = (await request.json()) as { email?: string; name?: string; password?: string };
-    const email = payload.email?.trim() ?? "";
-    const name = payload.name?.trim() || email.split("@")[0] || "Пользователь";
+    const payload = (await request.json()) as { username?: string; name?: string; password?: string };
+    const username = payload.username?.trim() ?? "";
+    const name = payload.name?.trim() || username || "Пользователь";
     const password = payload.password ?? "";
 
-    if (!EMAIL_PATTERN.test(email)) {
-      return NextResponse.json({ error: "Введите корректный email." }, { status: 400 });
+    if (!USERNAME_PATTERN.test(username)) {
+      return NextResponse.json(
+        { error: "Никнейм должен быть 3-32 символа: латиница, цифры, _ или -." },
+        { status: 400 },
+      );
     }
 
     if (password.length < 8) {
@@ -22,10 +25,10 @@ export async function POST(request: Request) {
     }
 
     const shouldCopyLegacyState = getUserCount() === 0;
-    const user = createUser({ email, name, password });
+    const user = createUser({ username, name, password });
 
     if (!user) {
-      return NextResponse.json({ error: "Аккаунт с таким email уже существует." }, { status: 409 });
+      return NextResponse.json({ error: "Аккаунт с таким никнеймом уже существует." }, { status: 409 });
     }
 
     if (shouldCopyLegacyState) {

@@ -101,7 +101,7 @@ export type StudyStats = {
 
 export type AuthUser = {
   id: string;
-  email: string;
+  username: string;
   name: string;
   createdAt: string;
 };

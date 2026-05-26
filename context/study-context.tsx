@@ -45,8 +45,8 @@ type StudyContextValue = {
   theme: ThemeMode;
   hydrated: boolean;
   metrics: DashboardMetrics;
-  login: (email: string, password: string) => Promise<AuthResult>;
-  register: (name: string, email: string, password: string) => Promise<AuthResult>;
+  login: (username: string, password: string) => Promise<AuthResult>;
+  register: (name: string, username: string, password: string) => Promise<AuthResult>;
   logout: () => Promise<void>;
   setSelectedLessonId: (lessonId: string) => void;
   setTheme: (theme: ThemeMode) => void;
@@ -279,7 +279,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       if (!SERVER_STATE_ENABLED) {
         setAuthUser({
           id: "local",
-          email: "local@hanzi-flow.app",
+          username: "local",
           name: "Локальный режим",
           createdAt: new Date().toISOString(),
         });
@@ -459,12 +459,12 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  function login(email: string, password: string) {
-    return submitAuth("/api/auth/login", { email, password });
+  function login(username: string, password: string) {
+    return submitAuth("/api/auth/login", { username, password });
   }
 
-  function register(name: string, email: string, password: string) {
-    return submitAuth("/api/auth/register", { name, email, password });
+  function register(name: string, username: string, password: string) {
+    return submitAuth("/api/auth/register", { name, username, password });
   }
 
   async function logout() {

@@ -11,7 +11,7 @@ export function AuthPanel() {
   const { login, register } = useStudy();
   const [mode, setMode] = useState<AuthMode>("login");
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -22,7 +22,7 @@ export function AuthPanel() {
     setError(null);
 
     const result =
-      mode === "login" ? await login(email, password) : await register(name, email, password);
+      mode === "login" ? await login(username, password) : await register(name, username, password);
 
     setLoading(false);
 
@@ -96,15 +96,14 @@ export function AuthPanel() {
           ) : null}
 
           <label className="grid gap-2 text-sm">
-            <span className="font-medium">Email</span>
+            <span className="font-medium">Никнейм</span>
             <input
-              type="email"
-              value={email}
+              value={username}
               className="rounded-[14px] px-3 py-3"
-              placeholder="you@example.com"
-              autoComplete="email"
+              placeholder="eirkekrie"
+              autoComplete="username"
               required
-              onChange={(event) => setEmail(event.target.value)}
+              onChange={(event) => setUsername(event.target.value)}
             />
           </label>
 

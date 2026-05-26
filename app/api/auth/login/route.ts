@@ -6,18 +6,18 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
-    const payload = (await request.json()) as { email?: string; password?: string };
-    const email = payload.email?.trim() ?? "";
+    const payload = (await request.json()) as { username?: string; password?: string };
+    const username = payload.username?.trim() ?? "";
     const password = payload.password ?? "";
 
-    if (!email || !password) {
-      return NextResponse.json({ error: "Введите email и пароль." }, { status: 400 });
+    if (!username || !password) {
+      return NextResponse.json({ error: "Введите никнейм и пароль." }, { status: 400 });
     }
 
-    const user = verifyUserCredentials(email, password);
+    const user = verifyUserCredentials(username, password);
 
     if (!user) {
-      return NextResponse.json({ error: "Неверный email или пароль." }, { status: 401 });
+      return NextResponse.json({ error: "Неверный никнейм или пароль." }, { status: 401 });
     }
 
     const session = createSession(user.id);
