@@ -61,16 +61,36 @@ python scripts/generate_card_audio.py --input path/to/cards.txt
 или через npm:
 
 ```bash
-npm run generate:audio -- --input path/to/cards.txt
+npm run generate:audio -- -- path/to/cards.txt
 ```
 
-По умолчанию используется Qwen TTS. Для CosyVoice 3.0 передайте `--engine cosyvoice`:
+По умолчанию используется Kokoro 82M. Для первой генерации установите зависимости:
 
 ```bash
-npm run generate:audio -- --engine cosyvoice --input path/to/cards.txt --force
+pip install -r requirements-kokoro-tts.txt
 ```
 
-Перед Qwen-генерацией установите зависимости:
+Kokoro для Mandarin использует `KOKORO_LANG_CODE=z` и голоса `zf_*`/`zm_*`. Базовые настройки уже лежат в
+`.env.example`; обычно достаточно выполнить:
+
+```bash
+npm run generate:audio -- -- path/to/cards.txt --force
+```
+
+Для Qwen или CosyVoice 3.0 передайте нужный движок явно:
+
+```bash
+npm run generate:audio -- -- path/to/cards.txt --engine qwen --force
+npm run generate:audio -- -- path/to/cards.txt --engine cosyvoice --force
+```
+
+Если хочется использовать именно `--input`, в npm на Windows нужен дополнительный разделитель:
+
+```bash
+npm run generate:audio -- -- --input path/to/cards.txt --force
+```
+
+Перед Qwen-генерацией установите зависимости Qwen:
 
 ```bash
 pip install -r requirements-qwen-tts.txt
@@ -103,12 +123,18 @@ urok 3
 
 - `--force` — пересоздать аудио даже если файл уже есть
 - `--limit 10` — сгенерировать только первые 10 карточек для проверки
-- `--engine qwen|cosyvoice` — выбрать TTS-движок
+- `--engine kokoro|qwen|cosyvoice` — выбрать TTS-движок
 - `--output-dir public/audio/cards` — изменить каталог аудиофайлов
 - `--manifest public/audio/cards/manifest.json` — изменить путь манифеста
 
 Основные переменные генератора лежат в `.env.example`:
 
+- `CARD_AUDIO_TTS_ENGINE`
+- `KOKORO_MODEL_ID`
+- `KOKORO_LANG_CODE`
+- `KOKORO_VOICE`
+- `KOKORO_DEVICE`
+- `KOKORO_SPEED`
 - `QWEN_TTS_MODEL`
 - `QWEN_TTS_LANGUAGE`
 - `QWEN_TTS_DEVICE`

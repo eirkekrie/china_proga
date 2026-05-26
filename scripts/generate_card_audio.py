@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import os
 import re
 import unicodedata
 from dataclasses import dataclass
@@ -10,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from cosyvoice_runtime import CosyVoiceRuntime
+from kokoro_tts_runtime import KokoroTTSRuntime
 from qwen_tts_runtime import REPO_ROOT, QwenTTSRuntime
 
 
@@ -18,6 +20,11 @@ WHITESPACE_PATTERN = re.compile(r"\s+")
 BREAK_PATTERN = re.compile(r"<br\s*/?>", re.IGNORECASE)
 ASCII_SLUG_PATTERN = re.compile(r"[^a-z0-9]+")
 LESSON_HEADER_PATTERN = re.compile(r"^(?:urok|урок)\s+(.+?)\s*:?\s*$", re.IGNORECASE)
+TTS_ENGINES = ("kokoro", "qwen", "cosyvoice")
+
+
+def log(message: str) -> None:
+    print(message, flush=True)
 
 
 @dataclass(frozen=True)
@@ -104,6 +111,8 @@ def build_generation_text(card: ParsedCard) -> str:
 
 
 def create_tts_runtime(engine: str):
+    if engine == "kokoro":
+        return KokoroTTSRuntime()
     if engine == "qwen":
         return QwenTTSRuntime()
     if engine == "cosyvoice":
@@ -112,6 +121,8 @@ def create_tts_runtime(engine: str):
 
 
 def get_engine_manifest_name(engine: str) -> str:
+    if engine == "kokoro":
+        return "kokoro-82m-local"
     if engine == "qwen":
         return "qwen3-tts-local"
     if engine == "cosyvoice":
@@ -130,12 +141,18 @@ def load_existing_manifest(path: Path) -> dict:
 
 
 def parse_arguments() -> argparse.Namespace:
+    default_engine = os.getenv("CARD_AUDIO_TTS_ENGINE", "kokoro").strip() or "kokoro"
     parser = argparse.ArgumentParser(
         description="Generate pre-rendered audio files and manifest for Hanzi Flow cards."
     )
     parser.add_argument(
+        "input_path",
+        nargs="?",
+        help="Path to a UTF-8 text file. This positional form is kept for npm argument forwarding quirks.",
+    )
+    parser.add_argument(
         "--input",
-        required=True,
+        default=None,
         help="Path to a UTF-8 text file with lines like дєє;rГ©n<br>Р§РµР»РѕРІРµРє",
     )
     parser.add_argument(
@@ -155,8 +172,8 @@ def parse_arguments() -> argparse.Namespace:
     )
     parser.add_argument(
         "--engine",
-        choices=["qwen", "cosyvoice"],
-        default="qwen",
+        choices=TTS_ENGINES,
+        default=default_engine,
         help="TTS engine to use for generation.",
     )
     parser.add_argument(
@@ -165,7 +182,16 @@ def parse_arguments() -> argparse.Namespace:
         default=0,
         help="Optional number of cards to generate for a quick test.",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if not args.input:
+        args.input = args.input_path
+    elif args.input_path and args.input_path != args.input:
+        parser.error("Provide the input file either as --input or as a positional argument, not both.")
+
+    if not args.input:
+        parser.error("the following arguments are required: --input or input_path")
+
+    return args
 
 
 def main() -> None:
@@ -195,9 +221,14 @@ def main() -> None:
     if not cards:
         raise RuntimeError("No valid cards were found in the input file.")
 
+    log(f"Loaded {len(cards)} cards from {input_path}.")
+    log(f"Using TTS engine: {args.engine}.")
     runtime = create_tts_runtime(args.engine)
     runtime.load_model()
     engine_name = get_engine_manifest_name(args.engine)
+    model_id = runtime.settings.model_id
+    model_mode = runtime.model_mode
+    selected_speaker = runtime.get_selected_speaker()
 
     existing_manifest = load_existing_manifest(manifest_path)
     entries = dict(existing_manifest.get("entries", {}))
@@ -214,10 +245,18 @@ def main() -> None:
 
         output_path = output_dir / output_filename
         public_path = f"/audio/cards/{output_filename}"
+        existing_matches_runtime = (
+            existing_entry.get("engine") == engine_name
+            and existing_entry.get("modelId") == model_id
+            and existing_entry.get("mode") == model_mode
+            and existing_entry.get("speaker") == selected_speaker
+        )
 
-        if output_path.exists() and not args.force:
+        if output_path.exists() and not args.force and existing_matches_runtime:
             reused_count += 1
+            log(f"[{index + 1}/{len(cards)}] Reused {output_filename}")
         else:
+            log(f"[{index + 1}/{len(cards)}] Generating {output_filename} from {card.hanzi} / {card.pinyin}")
             audio_bytes = runtime.synthesize_wav_bytes(
                 build_generation_text(card),
                 instruct=build_generation_instruct(card),
@@ -233,18 +272,18 @@ def main() -> None:
             "text": card.hanzi,
             "generatedAt": datetime.now(timezone.utc).isoformat(),
             "engine": engine_name,
-            "modelId": runtime.settings.model_id,
-            "mode": runtime.model_mode,
-            "speaker": runtime.get_selected_speaker(),
+            "modelId": model_id,
+            "mode": model_mode,
+            "speaker": selected_speaker,
         }
 
     manifest = {
         "version": 1,
         "generatedAt": datetime.now(timezone.utc).isoformat(),
         "engine": engine_name,
-        "modelId": runtime.settings.model_id,
-        "mode": runtime.model_mode,
-        "speaker": runtime.get_selected_speaker(),
+        "modelId": model_id,
+        "mode": model_mode,
+        "speaker": selected_speaker,
         "sourceFile": str(input_path),
         "entries": entries,
         "stats": {
@@ -267,4 +306,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\nAudio generation interrupted by user.", flush=True)
