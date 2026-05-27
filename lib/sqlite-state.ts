@@ -5,7 +5,9 @@ import { DatabaseSync } from "node:sqlite";
 import { createSeedState, normalizePersistedState, type PersistedAppState } from "@/lib/storage";
 import type { AuthUser } from "@/lib/types";
 
-const databasePath = resolve(process.cwd(), process.env.DATABASE_PATH ?? "data/hanzi-flow.db");
+const databasePath = process.env.DATABASE_PATH
+  ? resolve(/* turbopackIgnore: true */ process.cwd(), process.env.DATABASE_PATH)
+  : resolve(process.cwd(), "data", "hanzi-flow.db");
 const SESSION_DURATION_MS = 1000 * 60 * 60 * 24 * 30;
 const PASSWORD_KEY_LENGTH = 64;
 
