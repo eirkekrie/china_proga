@@ -35,8 +35,11 @@ type AuthResult = {
   error?: string;
 };
 
+type AuthStatus = "checking" | "authenticated" | "unauthenticated" | "offline";
+
 type StudyContextValue = {
   authUser: AuthUser | null;
+  authStatus: AuthStatus;
   cards: Card[];
   filteredCards: Card[];
   availableLessons: LessonSummary[];
@@ -67,8 +70,23 @@ export type CardLessonPatch = Pick<Card, "lessonId" | "lessonTitle">;
 export type CardManagementPatch = Partial<Pick<Card, "hanzi" | "pinyin" | "translation">> & Partial<CardLessonPatch>;
 
 const SERVER_STATE_ENABLED = process.env.NEXT_PUBLIC_DISABLE_SERVER_STATE !== "1";
+const HYDRATION_REQUEST_TIMEOUT_MS = 10000;
 
 const StudyContext = createContext<StudyContextValue | null>(null);
+
+async function fetchWithTimeout(input: string, init: RequestInit = {}, timeoutMs = HYDRATION_REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
 
 function getLessonNumber(title: string) {
   const match = title.match(/\d+/);
@@ -186,6 +204,13 @@ function normalizeStatsForToday(stats: StudyStats, now: Date) {
   return syncStatsCalendar(stats, now);
 }
 
+function normalizeStateForToday(state: PersistedAppState) {
+  return {
+    ...state,
+    stats: normalizeStatsForToday(state.stats, new Date()),
+  };
+}
+
 function recordStudyTime(stats: StudyStats, now: Date, durationMs: number) {
   const today = dayKey(now);
   const normalized = normalizeStatsForToday(stats, now);
@@ -267,6 +292,7 @@ function removeStudySession(stats: StudyStats, session: StudySessionLogEntry, no
 export function StudyProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<PersistedAppState>(loadPersistedState());
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [authStatus, setAuthStatus] = useState<AuthStatus>(SERVER_STATE_ENABLED ? "checking" : "authenticated");
   const [selectedLessonId, setSelectedLessonId] = useState(ALL_LESSONS_ID);
   const [hydrated, setHydrated] = useState(false);
   const persistedJsonRef = useRef<string>("");
@@ -274,6 +300,13 @@ export function StudyProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let active = true;
     const cached = loadPersistedState();
+
+    function applyState(nextState: PersistedAppState) {
+      const normalizedForToday = normalizeStateForToday(nextState);
+
+      persistedJsonRef.current = JSON.stringify(normalizedForToday);
+      setState(normalizedForToday);
+    }
 
     async function hydrate() {
       if (!SERVER_STATE_ENABLED) {
@@ -283,19 +316,19 @@ export function StudyProvider({ children }: { children: ReactNode }) {
           name: "Локальный режим",
           createdAt: new Date().toISOString(),
         });
-        persistedJsonRef.current = JSON.stringify(cached);
-        setState({
-          ...cached,
-          stats: normalizeStatsForToday(cached.stats, new Date()),
-        });
+        setAuthStatus("authenticated");
+        applyState(cached);
         setHydrated(true);
         return;
       }
 
+      let verifiedUser: AuthUser | null = null;
+
       try {
-        const userResponse = await fetch("/api/auth/me", {
+        const userResponse = await fetchWithTimeout("/api/auth/me", {
           method: "GET",
           cache: "no-store",
+          credentials: "same-origin",
         });
 
         if (!userResponse.ok) {
@@ -304,18 +337,18 @@ export function StudyProvider({ children }: { children: ReactNode }) {
           }
 
           setAuthUser(null);
-          persistedJsonRef.current = JSON.stringify(cached);
-          setState({
-            ...cached,
-            stats: normalizeStatsForToday(cached.stats, new Date()),
-          });
+          setAuthStatus("unauthenticated");
+          applyState(cached);
           return;
         }
 
         const { user } = (await userResponse.json()) as { user: AuthUser };
-        const stateResponse = await fetch("/api/state", {
+        verifiedUser = user;
+
+        const stateResponse = await fetchWithTimeout("/api/state", {
           method: "GET",
           cache: "no-store",
+          credentials: "same-origin",
         });
 
         if (!stateResponse.ok) {
@@ -328,22 +361,16 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         }
 
         setAuthUser(user);
-        persistedJsonRef.current = JSON.stringify(loaded);
-        setState({
-          ...loaded,
-          stats: normalizeStatsForToday(loaded.stats, new Date()),
-        });
+        setAuthStatus("authenticated");
+        applyState(loaded);
       } catch {
         if (!active) {
           return;
         }
 
-        setAuthUser(null);
-        persistedJsonRef.current = JSON.stringify(cached);
-        setState({
-          ...cached,
-          stats: normalizeStatsForToday(cached.stats, new Date()),
-        });
+        setAuthUser(verifiedUser);
+        setAuthStatus("offline");
+        applyState(cached);
       } finally {
         if (active) {
           setHydrated(true);
@@ -359,7 +386,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!hydrated || !authUser) {
+    if (!hydrated) {
       return;
     }
 
@@ -371,7 +398,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
 
     persistedJsonRef.current = serialized;
 
-    if (!SERVER_STATE_ENABLED) {
+    if (!SERVER_STATE_ENABLED || authStatus !== "authenticated" || !authUser) {
       return;
     }
 
@@ -384,7 +411,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     }).catch(() => {
       persistedJsonRef.current = "";
     });
-  }, [authUser, hydrated, state]);
+  }, [authStatus, authUser, hydrated, state]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", state.theme === "dark");
@@ -418,7 +445,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
   }
 
   async function loadStateForAuthenticatedUser(user: AuthUser) {
-    const response = await fetch("/api/state", {
+    const response = await fetchWithTimeout("/api/state", {
       method: "GET",
       cache: "no-store",
       credentials: "same-origin",
@@ -429,18 +456,17 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     }
 
     const loaded = normalizePersistedState((await response.json()) as Partial<PersistedAppState>);
-    persistedJsonRef.current = JSON.stringify(loaded);
+    const normalizedForToday = normalizeStateForToday(loaded);
+    persistedJsonRef.current = JSON.stringify(normalizedForToday);
     setAuthUser(user);
+    setAuthStatus("authenticated");
     setSelectedLessonId(ALL_LESSONS_ID);
-    setState({
-      ...loaded,
-      stats: normalizeStatsForToday(loaded.stats, new Date()),
-    });
+    setState(normalizedForToday);
   }
 
   async function submitAuth(path: "/api/auth/login" | "/api/auth/register", payload: Record<string, string>) {
     try {
-      const response = await fetch(path, {
+      const response = await fetchWithTimeout(path, {
         method: "POST",
         credentials: "same-origin",
         headers: {
@@ -451,12 +477,15 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       const body = (await response.json()) as { user?: AuthUser; error?: string };
 
       if (!response.ok || !body.user) {
+        setAuthStatus("unauthenticated");
         return { ok: false, error: body.error ?? "Не удалось войти в аккаунт." };
       }
 
       await loadStateForAuthenticatedUser(body.user);
       return { ok: true };
     } catch (error) {
+      setAuthStatus("unauthenticated");
+
       if (error instanceof Error && error.message === "SESSION_NOT_SAVED") {
         return {
           ok: false,
@@ -482,6 +511,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       credentials: "same-origin",
     }).catch(() => undefined);
     setAuthUser(null);
+    setAuthStatus("unauthenticated");
     setSelectedLessonId(ALL_LESSONS_ID);
     setState(createSeedState());
     persistedJsonRef.current = "";
@@ -719,6 +749,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     <StudyContext.Provider
       value={{
         authUser,
+        authStatus,
         cards: state.cards,
         filteredCards,
         availableLessons,

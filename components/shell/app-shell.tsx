@@ -44,7 +44,7 @@ const navItems: NavItem[] = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { authUser, availableLessons, cards, hydrated, metrics, selectedLessonId, setSelectedLessonId, stats } = useStudy();
+  const { authStatus, authUser, availableLessons, cards, hydrated, metrics, selectedLessonId, setSelectedLessonId, stats } = useStudy();
 
   const dueTodayLabel = hydrated ? String(metrics.dueTodayCount) : "...";
   const progressLabel = hydrated ? `${metrics.progressPercent}%` : "...";
@@ -89,7 +89,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     setSelectedLessonId(lessonOptions[nextIndex].id);
   }
 
-  if (hydrated && !authUser) {
+  if (hydrated && authStatus === "unauthenticated") {
     return <AuthPanel />;
   }
 
