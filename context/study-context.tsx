@@ -296,6 +296,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
   const [selectedLessonId, setSelectedLessonId] = useState(ALL_LESSONS_ID);
   const [hydrated, setHydrated] = useState(false);
   const persistedJsonRef = useRef<string>("");
+  const pendingServerSaveRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -308,7 +309,10 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       setState(normalizedForToday);
     }
 
-    async function hydrate() {
+    applyState(cached);
+    setHydrated(true);
+
+    async function syncServerState() {
       if (!SERVER_STATE_ENABLED) {
         setAuthUser({
           id: "local",
@@ -317,8 +321,6 @@ export function StudyProvider({ children }: { children: ReactNode }) {
           createdAt: new Date().toISOString(),
         });
         setAuthStatus("authenticated");
-        applyState(cached);
-        setHydrated(true);
         return;
       }
 
@@ -338,7 +340,6 @@ export function StudyProvider({ children }: { children: ReactNode }) {
 
           setAuthUser(null);
           setAuthStatus("unauthenticated");
-          applyState(cached);
           return;
         }
 
@@ -362,6 +363,10 @@ export function StudyProvider({ children }: { children: ReactNode }) {
 
         setAuthUser(user);
         setAuthStatus("authenticated");
+        if (pendingServerSaveRef.current) {
+          return;
+        }
+
         applyState(loaded);
       } catch {
         if (!active) {
@@ -370,15 +375,10 @@ export function StudyProvider({ children }: { children: ReactNode }) {
 
         setAuthUser(verifiedUser);
         setAuthStatus("offline");
-        applyState(cached);
-      } finally {
-        if (active) {
-          setHydrated(true);
-        }
       }
     }
 
-    void hydrate();
+    void syncServerState();
 
     return () => {
       active = false;
@@ -390,18 +390,27 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    savePersistedState(state);
     const serialized = JSON.stringify(state);
-    if (serialized === persistedJsonRef.current) {
+    const stateChanged = serialized !== persistedJsonRef.current;
+
+    if (!stateChanged && !pendingServerSaveRef.current) {
       return;
     }
 
-    persistedJsonRef.current = serialized;
+    if (stateChanged) {
+      savePersistedState(state);
+      persistedJsonRef.current = serialized;
+
+      if (SERVER_STATE_ENABLED && authStatus !== "authenticated") {
+        pendingServerSaveRef.current = true;
+      }
+    }
 
     if (!SERVER_STATE_ENABLED || authStatus !== "authenticated" || !authUser) {
       return;
     }
 
+    pendingServerSaveRef.current = false;
     void fetch("/api/state", {
       method: "PUT",
       headers: {
@@ -409,6 +418,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       },
       body: serialized,
     }).catch(() => {
+      pendingServerSaveRef.current = true;
       persistedJsonRef.current = "";
     });
   }, [authStatus, authUser, hydrated, state]);
