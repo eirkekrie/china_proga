@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { CopyButton } from "@/components/copy-button";
 import { HanziHandwritingAnswer } from "@/components/hanzi-handwriting-answer";
 import { HanziWritingPractice } from "@/components/hanzi-writing-practice";
+import { LessonPicker } from "@/components/lesson-picker";
 import { useStudy } from "@/context/study-context";
 import { cardAudioEngine, preloadCardAudioManifest } from "@/lib/audio";
 import {
@@ -386,7 +387,9 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
     const canStartManualReview = flow === "review" && !manualReviewEnabled && manualReviewQueue.length > 0;
     const onlyPostponedCardsLeft = baseQueue.length > 0 && queue.length === 0 && postponedIds.length > 0;
     return (
-      <section className="glass-panel p-8 sm:p-10">
+      <div className="grid gap-4">
+        <LessonPicker />
+        <section className="glass-panel p-8 sm:p-10">
         <div className="flex flex-col gap-4">
           <span className="pill w-fit">
             {onlyPostponedCardsLeft ? "Все карточки отложены" : "Очередь пуста"}
@@ -438,7 +441,8 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
             </Link>
           </div>
         </div>
-      </section>
+        </section>
+      </div>
     );
   }
 
@@ -460,102 +464,50 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
 
   return (
     <div className="grid gap-6">
-      <section className="glass-panel grid gap-4 p-6 sm:grid-cols-[1.1fr_0.9fr] sm:p-7">
-        <div className="flex flex-col gap-4">
-          <span className="pill w-fit">
-            {flow === "review" ? (manualReviewEnabled ? "Ручной повтор" : "Повторение") : "Обучение"}
+      <LessonPicker />
+      <section className="study-header">
+        <div>
+          <span className="page-eyebrow">
+            {flow === "review" ? (manualReviewEnabled ? "Свободный повтор" : "По расписанию") : "Новые слова"}
           </span>
-          <h1 className="text-3xl font-semibold tracking-[-0.05em]">{title}</h1>
-          <p className="max-w-3xl text-sm muted-text">{description}</p>
-          {flow === "learn" ? (
-            <div className="grid gap-3 text-sm md:grid-cols-3">
-              <div className="rounded-[22px] border border-white/10 bg-white/5 p-4">
-                <p className="font-semibold">Новых за сессию</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {NEW_WORD_LIMIT_OPTIONS.map((value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      className={getLearnOptionClass(newWordsPerSession === value)}
-                      onClick={() => setNewWordsPerSession(value)}
-                    >
-                      {value}
-                    </button>
-                  ))}
-                </div>
+          <h1>{title}</h1>
+          <p>{description}</p>
+        </div>
+        <div className="study-header-metrics">
+          <span><small>В очереди</small><strong>{queue.length}</strong></span>
+          <span><small>Сегодня</small><strong>{metrics.dueTodayCount}</strong></span>
+          <span><small>Сессия</small><strong>{formatDuration(stats.sessionStudyTime)}</strong></span>
+        </div>
+        {flow === "learn" ? (
+          <details className="session-settings">
+            <summary>Настроить сессию</summary>
+            <div className="session-settings-grid">
+              <div>
+                <p>Новых слов</p>
+                <div>{NEW_WORD_LIMIT_OPTIONS.map((value) => (
+                  <button key={value} type="button" className={getLearnOptionClass(newWordsPerSession === value)} onClick={() => setNewWordsPerSession(value)}>{value}</button>
+                ))}</div>
               </div>
-              <div className="rounded-[22px] border border-white/10 bg-white/5 p-4">
-                <p className="font-semibold">Активный круг</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {ACTIVE_WINDOW_OPTIONS.map((value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      className={getLearnOptionClass(activeWindowSize === value)}
-                      onClick={() => setActiveWindowSize(value)}
-                    >
-                      {value}
-                    </button>
-                  ))}
-                </div>
+              <div>
+                <p>Размер очереди</p>
+                <div>{ACTIVE_WINDOW_OPTIONS.map((value) => (
+                  <button key={value} type="button" className={getLearnOptionClass(activeWindowSize === value)} onClick={() => setActiveWindowSize(value)}>{value}</button>
+                ))}</div>
               </div>
-              <div className="rounded-[22px] border border-white/10 bg-white/5 p-4">
-                <p className="font-semibold">Режим</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {learnModeOptions.map((option) => (
-                    <button
-                      key={option.id}
-                      type="button"
-                      className={getLearnOptionClass(learnMode === option.id)}
-                      onClick={() => setLearnMode(option.id)}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
+              <div>
+                <p>Состав</p>
+                <div>{learnModeOptions.map((option) => (
+                  <button key={option.id} type="button" className={getLearnOptionClass(learnMode === option.id)} onClick={() => setLearnMode(option.id)}>{option.label}</button>
+                ))}</div>
               </div>
-              <div className="md:col-span-3 flex flex-wrap items-center gap-3">
-              <span className="pill">
-                В очереди
-                <strong>{queue.length}</strong>
-              </span>
-              <span className="pill">
-                Новых осталось
-                <strong>{remainingNewSlots}</strong>
-              </span>
-              <span className="pill">
-                Отложено
-                <strong>{postponedIds.length}</strong>
-              </span>
-              {postponedIds.length > 0 ? (
-                <button type="button" className="btn-ghost px-4 py-2 text-sm" onClick={() => setPostponedIds([])}>
-                  Вернуть отложенные
-                </button>
-              ) : null}
-              {selectedLessonId !== ALL_LESSONS_ID ? (
-                <button type="button" className="btn-danger px-4 py-2 text-sm" onClick={handleResetProgress}>
-                  Сбросить прогресс {selectedLessonTitle}
-                </button>
-              ) : null}
+              <div className="session-settings-actions">
+                <span>{remainingNewSlots} новых осталось · {postponedIds.length} отложено</span>
+                {postponedIds.length > 0 ? <button type="button" className="btn-ghost" onClick={() => setPostponedIds([])}>Вернуть отложенные</button> : null}
+                {selectedLessonId !== ALL_LESSONS_ID ? <button type="button" className="btn-danger" onClick={handleResetProgress}>Сбросить прогресс урока</button> : null}
               </div>
             </div>
-          ) : null}
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-[24px] border border-white/10 bg-white/5 p-4">
-            <p className="subtle-text text-xs uppercase tracking-[0.18em]">В очереди</p>
-            <p className="mt-3 text-2xl font-semibold">{queue.length}</p>
-          </div>
-          <div className="rounded-[24px] border border-white/10 bg-white/5 p-4">
-            <p className="subtle-text text-xs uppercase tracking-[0.18em]">На сегодня</p>
-            <p className="mt-3 text-2xl font-semibold">{metrics.dueTodayCount}</p>
-          </div>
-          <div className="rounded-[24px] border border-white/10 bg-white/5 p-4">
-            <p className="subtle-text text-xs uppercase tracking-[0.18em]">Сессия</p>
-            <p className="mt-3 text-2xl font-semibold">{formatDuration(stats.sessionStudyTime)}</p>
-          </div>
-        </div>
+          </details>
+        ) : null}
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">

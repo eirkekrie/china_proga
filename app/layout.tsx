@@ -5,8 +5,8 @@ import { StudyProvider } from "@/context/study-context";
 import "@/app/globals.css";
 
 export const metadata: Metadata = {
-  title: "Hanzi Flow",
-  description: "Современное приложение для изучения китайских иероглифов с этапами, повторением и forgetting curve.",
+  title: "Hanzi Flow — китайский каждый день",
+  description: "Персональный тренажёр китайских слов, иероглифов и тонов с умными повторениями.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {

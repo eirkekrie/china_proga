@@ -2,9 +2,10 @@
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { applyReview, buildStudyQueue, computeDashboard, getEffectiveCardState, resetCardProgress } from "@/lib/learning";
+import { applyReview, buildStudyQueue, computeDashboard, resetCardProgress } from "@/lib/learning";
 import { parseCardLines } from "@/lib/parser";
 import { ALL_LESSONS_ID, UNASSIGNED_LESSON_ID } from "@/lib/constants";
+import { buildAvailableLessons } from "@/lib/lessons";
 import {
   createSeedState,
   loadPersistedState,
@@ -12,7 +13,14 @@ import {
   savePersistedState,
   type PersistedAppState,
 } from "@/lib/storage";
-import { dayKey } from "@/lib/utils";
+import {
+  createStudySession,
+  normalizeStateForToday,
+  normalizeStatsForToday,
+  recordStudySession,
+  recordStudyTime,
+  removeStudySession,
+} from "@/lib/study-stats";
 import type {
   AuthUser,
   Card,
@@ -86,207 +94,6 @@ async function fetchWithTimeout(input: string, init: RequestInit = {}, timeoutMs
   } finally {
     window.clearTimeout(timeoutId);
   }
-}
-
-function getLessonNumber(title: string) {
-  const match = title.match(/\d+/);
-  return match ? Number(match[0]) : Number.POSITIVE_INFINITY;
-}
-
-function sortLessons(left: LessonSummary, right: LessonSummary) {
-  const leftNumber = getLessonNumber(left.title);
-  const rightNumber = getLessonNumber(right.title);
-  if (leftNumber !== rightNumber) {
-    if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) {
-      return leftNumber - rightNumber;
-    }
-
-    if (Number.isFinite(leftNumber)) {
-      return -1;
-    }
-
-    if (Number.isFinite(rightNumber)) {
-      return 1;
-    }
-  }
-
-  return left.title.localeCompare(right.title, "ru", { numeric: true, sensitivity: "base" });
-}
-
-function buildAvailableLessons(cards: Card[]): LessonSummary[] {
-  const lessons = new Map<string, LessonSummary>();
-  const now = new Date();
-
-  cards.forEach((card) => {
-    if (card.lessonId === UNASSIGNED_LESSON_ID) {
-      return;
-    }
-
-    const derived = getEffectiveCardState(card, now);
-    const lesson = lessons.get(card.lessonId);
-    if (lesson) {
-      lesson.count += 1;
-      lesson.newCount += card.status === "new" ? 1 : 0;
-      lesson.learningCount += card.status === "learning" ? 1 : 0;
-      lesson.reviewCount += derived.computedStatus === "review" ? 1 : 0;
-      lesson.masteredCount += card.status === "mastered" ? 1 : 0;
-      lesson.progressPercent += derived.overallProgressPercent;
-      return;
-    }
-
-    lessons.set(card.lessonId, {
-      id: card.lessonId,
-      title: card.lessonTitle,
-      count: 1,
-      newCount: card.status === "new" ? 1 : 0,
-      learningCount: card.status === "learning" ? 1 : 0,
-      reviewCount: derived.computedStatus === "review" ? 1 : 0,
-      masteredCount: card.status === "mastered" ? 1 : 0,
-      progressPercent: derived.overallProgressPercent,
-    });
-  });
-
-  return [...lessons.values()]
-    .map((lesson) => ({
-      ...lesson,
-      progressPercent: lesson.count > 0 ? Math.round(lesson.progressPercent / lesson.count) : 0,
-    }))
-    .sort(sortLessons);
-}
-
-const STUDY_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-
-function cleanDailyStudyLog(dailyStudyLog: Record<string, number>) {
-  const cleaned: Record<string, number> = {};
-
-  Object.entries(dailyStudyLog).forEach(([key, value]) => {
-    if (STUDY_DATE_PATTERN.test(key) && Number.isFinite(value) && value > 0) {
-      cleaned[key] = Math.round(value);
-    }
-  });
-
-  return cleaned;
-}
-
-function getLastStudyDate(dailyStudyLog: Record<string, number>) {
-  return Object.keys(dailyStudyLog)
-    .filter((key) => dailyStudyLog[key] > 0)
-    .sort()
-    .at(-1) ?? null;
-}
-
-function getCurrentStreakDays(dailyStudyLog: Record<string, number>, now: Date) {
-  let streakDays = 0;
-  const cursor = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-  while ((dailyStudyLog[dayKey(cursor)] ?? 0) > 0) {
-    streakDays += 1;
-    cursor.setDate(cursor.getDate() - 1);
-  }
-
-  return streakDays;
-}
-
-function syncStatsCalendar(stats: StudyStats, now: Date) {
-  const today = dayKey(now);
-  const dailyStudyLog = cleanDailyStudyLog(stats.dailyStudyLog);
-
-  return {
-    ...stats,
-    dailyStudyLog,
-    todayStudyTime: dailyStudyLog[today] ?? 0,
-    streakDays: getCurrentStreakDays(dailyStudyLog, now),
-    lastStudyDate: getLastStudyDate(dailyStudyLog),
-  };
-}
-
-function normalizeStatsForToday(stats: StudyStats, now: Date) {
-  return syncStatsCalendar(stats, now);
-}
-
-function normalizeStateForToday(state: PersistedAppState) {
-  return {
-    ...state,
-    stats: normalizeStatsForToday(state.stats, new Date()),
-  };
-}
-
-function recordStudyTime(stats: StudyStats, now: Date, durationMs: number) {
-  const today = dayKey(now);
-  const normalized = normalizeStatsForToday(stats, now);
-  const dailyStudyLog = {
-    ...normalized.dailyStudyLog,
-    [today]: (normalized.dailyStudyLog[today] ?? 0) + durationMs,
-  };
-
-  return syncStatsCalendar(
-    {
-      ...normalized,
-      totalStudyTime: normalized.totalStudyTime + durationMs,
-      sessionStudyTime: normalized.sessionStudyTime + durationMs,
-      dailyStudyLog,
-    },
-    now,
-  );
-}
-
-function createStudySession(input: StudySessionInput, now: Date): StudySessionLogEntry | null {
-  const durationMs = Math.round(input.durationMs);
-
-  if (!STUDY_DATE_PATTERN.test(input.date) || !Number.isFinite(durationMs) || durationMs <= 0) {
-    return null;
-  }
-
-  return {
-    id: `session-${now.getTime().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-    date: input.date,
-    title: input.title.trim() || "Учебная сессия",
-    activity: input.activity,
-    durationMs,
-    note: input.note?.trim() ?? "",
-    createdAt: now.toISOString(),
-  };
-}
-
-function recordStudySession(stats: StudyStats, session: StudySessionLogEntry, now: Date) {
-  const normalized = normalizeStatsForToday(stats, now);
-  const dailyStudyLog = {
-    ...normalized.dailyStudyLog,
-    [session.date]: (normalized.dailyStudyLog[session.date] ?? 0) + session.durationMs,
-  };
-
-  return syncStatsCalendar(
-    {
-      ...normalized,
-      totalStudyTime: normalized.totalStudyTime + session.durationMs,
-      dailyStudyLog,
-      studySessions: [session, ...normalized.studySessions],
-    },
-    now,
-  );
-}
-
-function removeStudySession(stats: StudyStats, session: StudySessionLogEntry, now: Date) {
-  const normalized = normalizeStatsForToday(stats, now);
-  const nextDayTotal = Math.max(0, (normalized.dailyStudyLog[session.date] ?? 0) - session.durationMs);
-  const dailyStudyLog = {
-    ...normalized.dailyStudyLog,
-    [session.date]: nextDayTotal,
-  };
-
-  if (nextDayTotal <= 0) {
-    delete dailyStudyLog[session.date];
-  }
-
-  return syncStatsCalendar(
-    {
-      ...normalized,
-      totalStudyTime: Math.max(0, normalized.totalStudyTime - session.durationMs),
-      dailyStudyLog,
-      studySessions: normalized.studySessions.filter((entry) => entry.id !== session.id),
-    },
-    now,
-  );
 }
 
 export function StudyProvider({ children }: { children: ReactNode }) {
@@ -410,17 +217,35 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    pendingServerSaveRef.current = false;
-    void fetch("/api/state", {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: serialized,
-    }).catch(() => {
-      pendingServerSaveRef.current = true;
-      persistedJsonRef.current = "";
-    });
+    pendingServerSaveRef.current = true;
+    const controller = new AbortController();
+    const saveTimer = window.setTimeout(() => {
+      void fetch("/api/state", {
+        method: "PUT",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: serialized,
+        signal: controller.signal,
+      })
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error(`STATE_SAVE_FAILED_${response.status}`);
+          }
+          pendingServerSaveRef.current = false;
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) {
+            pendingServerSaveRef.current = true;
+          }
+        });
+    }, 450);
+
+    return () => {
+      window.clearTimeout(saveTimer);
+      controller.abort();
+    };
   }, [authStatus, authUser, hydrated, state]);
 
   useEffect(() => {

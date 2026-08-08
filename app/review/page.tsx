@@ -6,8 +6,8 @@ export default function ReviewPage() {
   return (
     <StudySession
       flow="review"
-      title="Повторение по forgetting score"
-      description="Экран собирает карточки, у которых подошёл срок повторения, вырос forgetting score или начала снижаться уверенность знания."
+      title="Повторить изученное"
+      description="Здесь только те карточки, которым сейчас полезнее всего вернуться в память."
     />
   );
 }

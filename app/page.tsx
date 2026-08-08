@@ -1,223 +1,201 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, BarChart3, BookOpen, Brain, Calendar, Flame, GraduationCap, ListChecks, Music2, Sparkles, Timer, TrendingUp } from "lucide-react";
-import { ImportPanel } from "@/components/import-panel";
+import type { CSSProperties } from "react";
+import {
+  ArrowRight,
+  BookOpen,
+  Brain,
+  Check,
+  ChevronRight,
+  Circle,
+  Clock3,
+  Flame,
+  GraduationCap,
+  Headphones,
+  Sparkles,
+  Target,
+  TrendingUp,
+} from "lucide-react";
+import { LessonPicker } from "@/components/lesson-picker";
 import { useStudy } from "@/context/study-context";
-import { STAGE_LABELS } from "@/lib/constants";
-import { learningStages, type LearningStage } from "@/lib/types";
+import { ALL_LESSONS_ID } from "@/lib/constants";
 import { formatDuration } from "@/lib/utils";
 
-const dashboardStages: LearningStage[] = [...learningStages];
+const DAILY_GOAL_MS = 15 * 60 * 1000;
 
-const launchCards = [
-  {
-    href: "/learn",
-    eyebrow: "Новый цикл",
-    title: "Изучение Hanzi",
-    description: "Комплексная цепочка интервального повторения.",
-    icon: GraduationCap,
-    tone: "sky",
-    cta: "Запуск",
-  },
-  {
-    href: "/review",
-    eyebrow: "Повторение",
-    title: "Интервальный разбор",
-    description: "Освежите карточки, которым пора вернуться в память.",
-    icon: Brain,
-    tone: "amber",
-    cta: "Повторить",
-  },
-  {
-    href: "/tones",
-    eyebrow: "Фонетика",
-    title: "Тренеры тонов",
-    description: "Отточите распознавание тональности и похожих слогов.",
-    icon: Music2,
-    tone: "indigo",
-    cta: "Начать",
-  },
-  {
-    href: "/test",
-    eyebrow: "Контроль знаний",
-    title: "Общее тестирование",
-    description: "Проверьте перевод, иероглифы и пиньинь отдельным режимом.",
-    icon: ListChecks,
-    tone: "emerald",
-    cta: "Тест",
-  },
-] as const;
+function pluralizeCards(value: number) {
+  const lastTwo = value % 100;
+  const last = value % 10;
+  if (lastTwo >= 11 && lastTwo <= 14) return "карточек";
+  if (last === 1) return "карточка";
+  if (last >= 2 && last <= 4) return "карточки";
+  return "карточек";
+}
 
 export default function HomePage() {
-  const { hydrated, metrics, stats } = useStudy();
-
-  const summaryCards = [
-    { label: "Всего карточек", value: metrics.totalCards, icon: BookOpen, tone: "slate" },
-    { label: "Новых", value: metrics.newCount, icon: Sparkles, tone: "sky" },
-    { label: "В изучении", value: metrics.learningCount, icon: GraduationCap, tone: "indigo" },
-    { label: "В повторении", value: metrics.reviewCount, icon: Brain, tone: "amber" },
-    { label: "Освоено", value: metrics.masteredCount, icon: TrendingUp, tone: "emerald" },
-    { label: "Повторить сегодня", value: metrics.dueTodayCount, icon: Flame, tone: "rose" },
-  ] as const;
+  const { availableLessons, hydrated, metrics, selectedLessonId, stats } = useStudy();
 
   if (!hydrated) {
-    return <div className="glass-panel p-8 text-sm muted-text">Инициализирую стартовые данные и локальное хранилище...</div>;
+    return <div className="today-skeleton" aria-label="Загрузка" />;
   }
 
+  const lessonTitle =
+    selectedLessonId === ALL_LESSONS_ID
+      ? "Все уроки"
+      : availableLessons.find((lesson) => lesson.id === selectedLessonId)?.title ?? "Без урока";
+  const accuracy = stats.totalReviews > 0 ? Math.round((stats.totalCorrect / stats.totalReviews) * 100) : 0;
+  const dailyProgress = Math.min(100, Math.round((stats.todayStudyTime / DAILY_GOAL_MS) * 100));
+  const hasReviews = metrics.dueTodayCount > 0;
+  const primaryHref = hasReviews ? "/review" : "/learn";
+  const primaryLabel = hasReviews ? "Начать повторение" : "Учить новые слова";
+  const dateLabel = new Intl.DateTimeFormat("ru-RU", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(new Date());
+
   return (
-    <div className="grid gap-6">
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {launchCards.map((card) => {
-          const Icon = card.icon;
-          const count =
-            card.href === "/learn"
-              ? metrics.newCount + metrics.learningCount
-              : card.href === "/review"
-                ? metrics.dueTodayCount
-                : card.href === "/tones"
-                  ? metrics.totalCards
-                  : metrics.totalCards;
+    <div className="today-page">
+      <div className="today-topline">
+        <div>
+          <p className="today-date">{dateLabel}</p>
+          <h1>Что учим сегодня?</h1>
+          <p>Короткая сессия важнее идеального плана. Начни с того, что уже пора повторить.</p>
+        </div>
+        <LessonPicker compact />
+      </div>
 
-          return (
-            <article key={card.href} className={`bento-card tone-${card.tone}`}>
-              <div className="flex items-start justify-between gap-4">
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2">
-                    <span className="icon-tile">
-                      <Icon size={18} />
-                    </span>
-                    <span className="meta-label">{card.eyebrow}</span>
-                  </div>
-                  <div>
-                    <h2 className="text-base font-semibold text-slate-100">{card.title}</h2>
-                    <p className="mt-2 text-[11px] leading-relaxed muted-text">{card.description}</p>
-                  </div>
-                </div>
-                <span className="count-badge">{count}</span>
-              </div>
-              <Link href={card.href} className="btn-primary mt-5 w-full py-2.5 text-xs">
-                {card.cta}
-                <ArrowRight size={14} />
+      <section className="today-hero">
+        <div className="today-hero-copy">
+          <span className="today-kicker">
+            <Target size={15} />
+            План на сегодня
+          </span>
+          <h2>
+            {hasReviews
+              ? `${metrics.dueTodayCount} ${pluralizeCards(metrics.dueTodayCount)} ждут повторения`
+              : "Повторы закончены — можно двигаться дальше"}
+          </h2>
+          <p>
+            {hasReviews
+              ? "Сначала верни в активную память знакомые слова, затем добавь немного нового материала."
+              : "Возьми несколько новых слов или закрепи произношение в тренировке тонов."}
+          </p>
+          <div className="today-hero-actions">
+            <Link href={primaryHref} className="btn-primary today-primary-action">
+              {primaryLabel}
+              <ArrowRight size={18} />
+            </Link>
+            {hasReviews && metrics.newCount > 0 ? (
+              <Link href="/learn" className="btn-ghost">
+                Учить новое
               </Link>
-            </article>
-          );
-        })}
-      </section>
-
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="glass-panel overflow-hidden p-6 sm:p-7">
-          <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-center">
-            <div>
-              <span className="pill w-fit">FSRS Trainer</span>
-              <h1 className="mt-5 max-w-3xl text-3xl font-bold leading-tight text-slate-100 sm:text-4xl">
-                Китайские иероглифы с поэтапной памятью, повторами и отдельной практикой тонов.
-              </h1>
-              <p className="mt-4 max-w-2xl text-sm leading-relaxed muted-text">
-                Система ведёт карточки через смысл, активное вспоминание и фонетику, а очередь повторения подстраивается
-                под ошибки, паузы и текущую уверенность.
-              </p>
-            </div>
-
-            <div className="progress-orbit" aria-label={`Общий прогресс ${metrics.progressPercent}%`}>
-              <svg viewBox="0 0 160 160" className="h-40 w-40 -rotate-90">
-                <circle cx="80" cy="80" r="62" className="stroke-slate-800" strokeWidth="12" fill="none" />
-                <circle
-                  cx="80"
-                  cy="80"
-                  r="62"
-                  className="stroke-sky-500 transition-all duration-1000"
-                  strokeWidth="12"
-                  strokeLinecap="round"
-                  fill="none"
-                  strokeDasharray="389"
-                  strokeDashoffset={389 - (389 * metrics.progressPercent) / 100}
-                />
-              </svg>
-              <div className="absolute inset-0 grid place-items-center text-center">
-                <div>
-                  <p className="text-3xl font-extrabold text-slate-100">{metrics.progressPercent}%</p>
-                  <p className="meta-label mt-1">Усвоено</p>
-                </div>
-              </div>
-            </div>
+            ) : null}
           </div>
         </div>
 
-        <aside className="grid gap-4">
-          <div className="metric-card">
-            <span className="icon-tile tone-sky">
-              <Timer size={18} />
-            </span>
+        <div className="daily-goal" aria-label={`Дневная цель выполнена на ${dailyProgress}%`}>
+          <div className="daily-goal-ring" style={{ "--goal-progress": `${dailyProgress * 3.6}deg` } as CSSProperties}>
             <div>
-              <p className="meta-label">Сегодня</p>
-              <p className="text-lg font-bold text-slate-100">{formatDuration(stats.todayStudyTime)}</p>
+              <strong>{dailyProgress}%</strong>
+              <span>из 15 минут</span>
             </div>
           </div>
-          <div className="metric-card">
-            <span className="icon-tile tone-amber">
-              <Flame size={18} />
-            </span>
+          <p>{stats.todayStudyTime > 0 ? `${formatDuration(stats.todayStudyTime)} сегодня` : "Начни первую сессию"}</p>
+        </div>
+      </section>
+
+      <section className="today-grid">
+        <div className="today-plan-panel">
+          <div className="section-heading">
             <div>
-              <p className="meta-label">Текущая сессия</p>
-              <p className="text-lg font-bold text-slate-100">{formatDuration(stats.sessionStudyTime)}</p>
+              <span>Маршрут</span>
+              <h2>Три небольших шага</h2>
+            </div>
+            <span className="plan-duration">
+              <Clock3 size={15} /> ≈ 15 минут
+            </span>
+          </div>
+
+          <div className="plan-steps">
+            <Link href="/review" className={metrics.dueTodayCount > 0 ? "plan-step is-primary" : "plan-step is-done"}>
+              <span className="plan-step-state">{metrics.dueTodayCount > 0 ? <Circle size={18} /> : <Check size={18} />}</span>
+              <span className="plan-step-icon"><Brain size={20} /></span>
+              <span className="plan-step-copy">
+                <small>Сначала</small>
+                <strong>Повторить изученное</strong>
+                <span>{metrics.dueTodayCount > 0 ? `${metrics.dueTodayCount} карточек по расписанию` : "На сегодня всё готово"}</span>
+              </span>
+              <ChevronRight size={18} />
+            </Link>
+
+            <Link href="/learn" className="plan-step">
+              <span className="plan-step-state"><Circle size={18} /></span>
+              <span className="plan-step-icon"><GraduationCap size={20} /></span>
+              <span className="plan-step-copy">
+                <small>Затем</small>
+                <strong>Добавить новое</strong>
+                <span>{Math.min(5, metrics.newCount)} из {metrics.newCount} новых карточек</span>
+              </span>
+              <ChevronRight size={18} />
+            </Link>
+
+            <Link href="/tones" className="plan-step">
+              <span className="plan-step-state"><Circle size={18} /></span>
+              <span className="plan-step-icon"><Headphones size={20} /></span>
+              <span className="plan-step-copy">
+                <small>В конце</small>
+                <strong>Размять слух</strong>
+                <span>5 вопросов на различение тонов</span>
+              </span>
+              <ChevronRight size={18} />
+            </Link>
+          </div>
+        </div>
+
+        <aside className="today-summary-panel">
+          <div className="section-heading">
+            <div>
+              <span>{lessonTitle}</span>
+              <h2>Твой прогресс</h2>
+            </div>
+            <Link href="/stats" aria-label="Открыть статистику"><ArrowRight size={18} /></Link>
+          </div>
+          <div className="summary-progress">
+            <div className="summary-progress-row">
+              <span>Освоено</span>
+              <strong>{metrics.progressPercent}%</strong>
+            </div>
+            <div className="progress-track"><span style={{ width: `${metrics.progressPercent}%` }} /></div>
+          </div>
+          <div className="summary-metrics">
+            <div>
+              <span className="summary-icon tone-amber"><Flame size={17} /></span>
+              <strong>{stats.streakDays}</strong>
+              <small>дней подряд</small>
+            </div>
+            <div>
+              <span className="summary-icon tone-emerald"><TrendingUp size={17} /></span>
+              <strong>{accuracy}%</strong>
+              <small>верных ответов</small>
+            </div>
+            <div>
+              <span className="summary-icon tone-sky"><Sparkles size={17} /></span>
+              <strong>{metrics.masteredCount}</strong>
+              <small>освоено</small>
             </div>
           </div>
-          <div className="metric-card">
-            <span className="icon-tile tone-indigo">
-              <Calendar size={18} />
+          <Link href="/cards" className="library-link">
+            <BookOpen size={17} />
+            <span>
+              <strong>Моя библиотека</strong>
+              <small>{metrics.totalCards} карточек в выбранном наборе</small>
             </span>
-            <div>
-              <p className="meta-label">Всего времени</p>
-              <p className="text-lg font-bold text-slate-100">{formatDuration(stats.totalStudyTime)}</p>
-            </div>
-          </div>
+            <ChevronRight size={17} />
+          </Link>
         </aside>
       </section>
-
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {summaryCards.map((item, index) => {
-          const Icon = item.icon;
-          return (
-            <div key={item.label} className={`metric-card animate-rise tone-${item.tone}`} style={{ animationDelay: `${index * 50}ms` }}>
-              <span className="icon-tile">
-                <Icon size={18} />
-              </span>
-              <div>
-                <p className="meta-label">{item.label}</p>
-                <p className="metric-value mt-2">{item.value}</p>
-              </div>
-            </div>
-          );
-        })}
-      </section>
-
-      <section className="glass-panel p-6 sm:p-7">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <span className="pill w-fit">
-              <BarChart3 size={14} />
-              Пайплайн обучения
-            </span>
-            <h2 className="mt-4 text-2xl font-semibold text-slate-100">Как движутся карточки</h2>
-          </div>
-          <p className="max-w-2xl text-sm muted-text">
-            Карточки двигаются дальше только при стабильных правильных ответах. Ошибки и большие паузы повышают риск
-            забывания, а FSRS пересчитывает следующий срок показа.
-          </p>
-        </div>
-
-        <div className="mt-6 grid gap-4 md:grid-cols-3">
-          {dashboardStages.map((stage) => (
-            <div key={stage} className="bento-card">
-              <p className="text-sm font-semibold text-slate-200">{STAGE_LABELS[stage]}</p>
-              <p className="mt-4 text-3xl font-bold text-slate-100">{metrics.stageBreakdown[stage]}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <ImportPanel />
     </div>
   );
 }
