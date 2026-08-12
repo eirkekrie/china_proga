@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Eye, Headphones, PenLine, Undo2 } from "lucide-react";
 import { CopyButton } from "@/components/copy-button";
 import { HanziHandwritingAnswer } from "@/components/hanzi-handwriting-answer";
 import { HanziWritingPractice } from "@/components/hanzi-writing-practice";
@@ -513,7 +514,7 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="flip-scene">
           <div className={`flip-card ${revealed ? "is-flipped" : ""} ${cardClass}`}>
-            <div className="flip-face glass-panel p-6 sm:p-8">
+            <div className="flip-face study-card-face glass-panel p-6 sm:p-8">
               <div className="flex h-full flex-col gap-6">
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-3">
@@ -557,6 +558,7 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
                       disabled={showPinyinHint}
                       onClick={handleShowPinyinHint}
                     >
+                      <Eye size={18} />
                       {showPinyinHint ? "Пиньинь открыт" : "Показать пиньинь"}
                     </button>
                     <button
@@ -564,6 +566,7 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
                       className="btn-ghost w-full justify-between px-5 py-4 text-left"
                       onClick={() => void handlePlayAudio()}
                     >
+                      <Headphones size={18} />
                       Прослушать
                     </button>
                   </div>
@@ -580,6 +583,7 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
                       className="btn-ghost w-full max-w-xl"
                       onClick={() => setShowHandwritingPad((value) => !value)}
                     >
+                      <PenLine size={18} />
                       {showHandwritingPad ? "Скрыть поле письма" : "Нарисовать иероглиф"}
                     </button>
                   ) : null}
@@ -589,6 +593,7 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
                     className="btn-primary w-full max-w-xl px-6 py-4 text-base shadow-[0_20px_48px_rgba(var(--accent),0.32)]"
                     onClick={() => setRevealed(true)}
                   >
+                    <Eye size={19} />
                     Показать ответ
                   </button>
                   <button
@@ -656,7 +661,7 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
               </div>
             </div>
 
-            <div className="flip-face flip-back glass-panel p-6 sm:p-8">
+            <div className="flip-face flip-back study-card-face glass-panel p-6 sm:p-8">
               <div className="flex h-full flex-col justify-between gap-6">
                 <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
                   <div>
@@ -674,6 +679,7 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
 
                   <div className="flex h-fit flex-wrap gap-2">
                     <button type="button" className="btn-ghost" onClick={() => setRevealed(false)}>
+                      <Undo2 size={17} />
                       Назад к вопросу
                     </button>
                     <button
@@ -681,6 +687,7 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
                       className="btn-secondary"
                       onClick={() => void handlePlayAudio({ countsAsHint: false })}
                     >
+                      <Headphones size={17} />
                       Прослушать
                     </button>
                   </div>
@@ -693,21 +700,21 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
                 ) : null}
 
                 <div className="grid gap-4 sm:grid-cols-3">
-                  <div className="rounded-[28px] border border-white/10 bg-white/5 p-5">
+                  <div className="study-answer-fact rounded-[28px] border border-white/10 bg-white/5 p-5">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="subtle-text text-xs uppercase tracking-[0.18em]">Иероглиф</p>
                       <CopyButton text={currentCard.hanzi} label="Копировать" copiedLabel="Скопировано" />
                     </div>
                     <p className="display-hanzi mt-3 select-text text-4xl font-semibold leading-none">{currentCard.hanzi}</p>
                   </div>
-                  <div className="rounded-[28px] border border-white/10 bg-white/5 p-5">
+                  <div className="study-answer-fact rounded-[28px] border border-white/10 bg-white/5 p-5">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="subtle-text text-xs uppercase tracking-[0.18em]">Пиньинь</p>
                       <CopyButton text={currentCard.pinyin} label="Копировать" copiedLabel="Скопировано" />
                     </div>
                     <p className="mt-3 select-text text-2xl font-semibold">{currentCard.pinyin}</p>
                   </div>
-                  <div className="rounded-[28px] border border-white/10 bg-white/5 p-5">
+                  <div className="study-answer-fact rounded-[28px] border border-white/10 bg-white/5 p-5">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="subtle-text text-xs uppercase tracking-[0.18em]">Перевод</p>
                       <CopyButton text={currentCard.translation} label="Копировать" copiedLabel="Скопировано" />
@@ -737,7 +744,7 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
                   {audioNotice ? <p className="text-sm text-[rgb(var(--accent))]">{audioNotice}</p> : null}
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-4">
+                <div className="study-rating-grid grid gap-3 sm:grid-cols-4">
                   <button type="button" className="btn-ghost" disabled={isAdvancing} onClick={handlePostpone}>
                     Отложить
                   </button>

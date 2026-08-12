@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ComponentType, ReactNode } from "react";
+import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import {
   BookOpen,
   Brain,
+  Ellipsis,
   Flame,
   GraduationCap,
   LayoutDashboard,
@@ -38,14 +39,20 @@ const secondaryNav: NavItem[] = [
   { href: "/stats", label: "Прогресс", icon: TrendingUp },
 ];
 
-const allNav = [...primaryNav, ...secondaryNav];
+const mobilePrimaryNav = [primaryNav[0], primaryNav[1], primaryNav[2], secondaryNav[2]];
+const mobileMoreNav = [secondaryNav[0], secondaryNav[1], secondaryNav[3]];
 
 function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   const Icon = item.icon;
 
   return (
-    <Link prefetch={false} href={item.href} className={["nav-chip", active ? "is-active" : ""].join(" ")}>
-      <Icon size={17} />
+    <Link
+      prefetch={false}
+      href={item.href}
+      aria-current={active ? "page" : undefined}
+      className={["nav-chip", active ? "is-active" : ""].join(" ")}
+    >
+      <span className="nav-icon"><Icon size={17} /></span>
       <span>{item.label}</span>
     </Link>
   );
@@ -54,6 +61,26 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { authStatus, hydrated, metrics, stats } = useStudy();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!mobileMenuOpen) {
+      return;
+    }
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setMobileMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [mobileMenuOpen]);
 
   if (hydrated && authStatus === "unauthenticated") {
     return <AuthPanel />;
@@ -82,28 +109,59 @@ export function AppShell({ children }: { children: ReactNode }) {
             <ThemeToggle />
           </div>
         </div>
-        <nav className="thin-scrollbar overflow-x-auto px-4 pb-3" aria-label="Основная навигация">
-          <div className="flex min-w-max items-center gap-2">
-            {allNav.map((item) => {
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.href}
-                  prefetch={false}
-                  href={item.href}
-                  className={["nav-chip", pathname === item.href ? "is-active" : ""].join(" ")}
-                >
-                  <Icon size={15} />
-                  {item.shortLabel ?? item.label}
-                </Link>
-              );
-            })}
-          </div>
-        </nav>
-        <div className="px-4 pb-3">
-          <AccountMenu />
-        </div>
       </header>
+
+      <nav className="mobile-bottom-nav lg:hidden" aria-label="Основная навигация">
+        {mobilePrimaryNav.map((item) => {
+          const Icon = item.icon;
+          const active = pathname === item.href;
+          return (
+            <Link
+              key={item.href}
+              prefetch={false}
+              href={item.href}
+              aria-current={active ? "page" : undefined}
+              className={["mobile-nav-item", active ? "is-active" : ""].join(" ")}
+            >
+              <span><Icon size={20} /></span>
+              <small>{item.shortLabel ?? item.label}</small>
+              {item.href === "/review" && hydrated && metrics.dueTodayCount > 0 ? (
+                <b>{Math.min(99, metrics.dueTodayCount)}</b>
+              ) : null}
+            </Link>
+          );
+        })}
+        <button
+          type="button"
+          className={["mobile-nav-item", mobileMoreNav.some((item) => item.href === pathname) || mobileMenuOpen ? "is-active" : ""].join(" ")}
+          aria-expanded={mobileMenuOpen}
+          aria-controls="mobile-more-menu"
+          onClick={() => setMobileMenuOpen((open) => !open)}
+        >
+          <span><Ellipsis size={21} /></span>
+          <small>Ещё</small>
+        </button>
+      </nav>
+
+      {mobileMenuOpen ? (
+        <div className="mobile-menu-scrim lg:hidden" onClick={() => setMobileMenuOpen(false)}>
+          <section
+            id="mobile-more-menu"
+            className="mobile-more-menu"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Дополнительная навигация"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mobile-more-handle" />
+            <p className="mobile-more-title">Дополнительно</p>
+            <nav className="mobile-more-links" aria-label="Дополнительная навигация">
+              {mobileMoreNav.map((item) => <NavLink key={item.href} item={item} active={pathname === item.href} />)}
+            </nav>
+            <div className="mobile-more-account"><AccountMenu /></div>
+          </section>
+        </div>
+      ) : null}
 
       <aside className="desktop-sidebar hidden lg:flex">
         <div>

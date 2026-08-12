@@ -290,54 +290,66 @@ export function CardsTable() {
 
   return (
     <div className="grid gap-6">
-      <section className="glass-panel p-6 sm:p-7">
+      <section className="cards-toolbar glass-panel p-5 sm:p-6">
         <div className="grid gap-4 lg:grid-cols-[1.3fr_0.7fr_0.7fr_0.7fr]">
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Поиск по иероглифу, пиньиню, переводу или уроку"
-            className="rounded-[22px] border border-white/10 bg-black/10 px-4 py-3 outline-none transition focus:border-[rgba(var(--accent),0.45)] focus:ring-2 focus:ring-[rgba(var(--accent),0.16)]"
-          />
+          <label className="field-control">
+            <span>Поиск</span>
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Иероглиф, пиньинь, перевод или урок"
+              className="rounded-[22px] border border-white/10 bg-black/10 px-4 py-3 outline-none transition focus:border-[rgba(var(--accent),0.45)] focus:ring-2 focus:ring-[rgba(var(--accent),0.16)]"
+            />
+          </label>
 
-          <select
-            value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value as FilterValue)}
-            className="rounded-[22px] border border-white/10 bg-black/10 px-4 py-3 outline-none"
-          >
-            <option value="all">Все статусы</option>
-            <option value="new">Новые</option>
-            <option value="learning">В изучении</option>
-            <option value="review">В повторении</option>
-            <option value="mastered">Освоенные</option>
-            <option value="hard">Трудные</option>
-          </select>
+          <label className="field-control">
+            <span>Статус</span>
+            <select
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value as FilterValue)}
+              className="rounded-[22px] border border-white/10 bg-black/10 px-4 py-3 outline-none"
+            >
+              <option value="all">Все статусы</option>
+              <option value="new">Новые</option>
+              <option value="learning">В изучении</option>
+              <option value="review">В повторении</option>
+              <option value="mastered">Освоенные</option>
+              <option value="hard">Трудные</option>
+            </select>
+          </label>
 
-          <select
-            value={stageFilter}
-            onChange={(event) => setStageFilter(event.target.value as LearningStage | "all")}
-            className="rounded-[22px] border border-white/10 bg-black/10 px-4 py-3 outline-none"
-          >
-            <option value="all">Все этапы</option>
-            <option value="hanzi_to_translation">Stage 1</option>
-            <option value="translation_to_hanzi">Stage 2</option>
-            <option value="hanzi_to_pinyin">Пиньинь</option>
-          </select>
+          <label className="field-control">
+            <span>Этап</span>
+            <select
+              value={stageFilter}
+              onChange={(event) => setStageFilter(event.target.value as LearningStage | "all")}
+              className="rounded-[22px] border border-white/10 bg-black/10 px-4 py-3 outline-none"
+            >
+              <option value="all">Все этапы</option>
+              <option value="hanzi_to_translation">Иероглиф → перевод</option>
+              <option value="translation_to_hanzi">Перевод → иероглиф</option>
+              <option value="hanzi_to_pinyin">Пиньинь</option>
+            </select>
+          </label>
 
-          <select
-            value={sortBy}
-            onChange={(event) => setSortBy(event.target.value as SortValue)}
-            className="rounded-[22px] border border-white/10 bg-black/10 px-4 py-3 outline-none"
-          >
-            <option value="due">Сначала к повторению</option>
-            <option value="forgetting">По забыванию</option>
-            <option value="memory">По памяти</option>
-            <option value="time">По времени</option>
-            <option value="alphabetical">По иероглифу</option>
-          </select>
+          <label className="field-control">
+            <span>Сортировка</span>
+            <select
+              value={sortBy}
+              onChange={(event) => setSortBy(event.target.value as SortValue)}
+              className="rounded-[22px] border border-white/10 bg-black/10 px-4 py-3 outline-none"
+            >
+              <option value="due">Сначала к повторению</option>
+              <option value="forgetting">По забыванию</option>
+              <option value="memory">По памяти</option>
+              <option value="time">По времени</option>
+              <option value="alphabetical">По иероглифу</option>
+            </select>
+          </label>
         </div>
       </section>
 
-      <section className="glass-panel p-5 sm:p-6">
+      <section className="cards-bulk-panel glass-panel p-5 sm:p-6">
         <div className="grid gap-4 xl:grid-cols-[1fr_auto] xl:items-end">
           <div className="flex flex-wrap items-center gap-3">
             <label className="btn-secondary cursor-pointer">
