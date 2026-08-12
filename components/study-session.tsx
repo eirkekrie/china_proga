@@ -15,13 +15,12 @@ import {
   LEARN_ROTATION_WINDOW,
   REVIEW_GRADE_LABELS,
   REVIEW_ROTATION_WINDOW,
-  STAGE_HINTS,
   STAGE_LABELS,
   STAGE_PROMPTS,
   UNASSIGNED_LESSON_ID,
 } from "@/lib/constants";
 import { pickCardFromQueue } from "@/lib/learning";
-import { formatDuration, formatRelativeDue } from "@/lib/utils";
+import { formatDuration } from "@/lib/utils";
 import type { DerivedCard, LearnQueueMode, ReviewGrade, StudyFlow } from "@/lib/types";
 
 type StudySessionProps = {
@@ -453,7 +452,6 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
   const promptLeadClass = isHanziRecallStage
     ? "text-[clamp(2.4rem,6vw,4.75rem)] leading-[1.08] break-words [overflow-wrap:anywhere]"
     : "display-hanzi text-[clamp(4rem,14vw,8rem)] leading-none tracking-tight";
-  const hintUsed = hasHintUsed(hintFlags);
   const cardClass =
     flashGrade === "good"
       ? "status-good"
@@ -725,24 +723,7 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
 
                 <HanziWritingPractice text={currentCard.hanzi} />
 
-                <div className="grid gap-4 rounded-[28px] border border-white/10 bg-white/5 p-5">
-                  <div className="flex items-center justify-between gap-4">
-                    <p className="text-sm font-medium">Подсказка по текущему этапу</p>
-                    <span className="text-sm muted-text">{formatRelativeDue(currentCard.nextReviewAt)}</span>
-                  </div>
-                  <p className="text-sm muted-text">{STAGE_HINTS[currentCard.currentStage]}</p>
-                  {hintUsed ? (
-                    <p className="text-sm text-[rgb(var(--warning))]">
-                      Использованы подсказки. Ответ будет засчитан максимум как «Трудно».
-                    </p>
-                  ) : null}
-                  {currentCard.overdueLevel === "critical" ? (
-                    <p className="text-sm text-[rgb(var(--danger))]">
-                      Карточка давно не повторялась. При ошибке система может откатить её на предыдущий этап.
-                    </p>
-                  ) : null}
-                  {audioNotice ? <p className="text-sm text-[rgb(var(--accent))]">{audioNotice}</p> : null}
-                </div>
+                {audioNotice ? <p className="text-sm text-[rgb(var(--accent))]">{audioNotice}</p> : null}
 
                 <div className="study-rating-grid grid gap-3 sm:grid-cols-4">
                   <button type="button" className="btn-ghost" disabled={isAdvancing} onClick={handlePostpone}>

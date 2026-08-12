@@ -804,39 +804,44 @@ textarea::placeholder {
 }
 
 .flip-scene {
-  perspective: 1800px;
+  min-width: 0;
 }
 
 .flip-card {
   position: relative;
-  min-height: 35rem;
-  transform-style: preserve-3d;
   transition:
-    transform 700ms cubic-bezier(0.16, 1, 0.3, 1),
     box-shadow 240ms ease,
     border-color 240ms ease;
 }
 
-.flip-card:not(.is-flipped) {
-  transform: translateZ(0);
+.flip-card > .flip-back {
+  display: none;
 }
 
-.flip-card.is-flipped {
-  transform: rotateY(180deg);
+.flip-card.is-flipped > .flip-face:not(.flip-back) {
+  display: none;
+}
+
+.flip-card.is-flipped > .flip-back {
+  display: block;
+  animation: answer-reveal 220ms ease both;
 }
 
 .flip-face {
-  position: absolute;
-  inset: 0;
-  backface-visibility: hidden;
+  position: relative;
   border-radius: 20px;
-  overflow-x: hidden;
-  overflow-y: auto;
-  scrollbar-width: thin;
+  overflow: visible;
 }
 
 .flip-back {
-  transform: rotateY(180deg);
+  transform: none;
+}
+
+@keyframes answer-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
 }
 
 .progress-track {
@@ -2061,18 +2066,6 @@ textarea::placeholder {
     0 0 0 1px rgba(var(--border), 0.09);
 }
 
-.dark .flip-face {
-  scrollbar-color: rgba(var(--border), 0.58) transparent;
-}
-
-.dark .flip-face::-webkit-scrollbar {
-  width: 7px;
-}
-
-.dark .flip-face::-webkit-scrollbar-track {
-  background: transparent;
-}
-
 .dark .mobile-bottom-nav {
   border-color: rgba(var(--border), 0.25);
   background: rgba(12, 18, 30, 0.96);
@@ -2208,7 +2201,7 @@ textarea::placeholder {
   }
 
   .flip-card {
-    min-height: 37rem;
+    min-height: 0;
   }
 
   .flip-face {
