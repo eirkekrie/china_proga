@@ -1,5 +1,5 @@
 ﻿import type { AudioManifest, AudioManifestEntry, Card } from "@/lib/types";
-import { buildCardKey } from "@/lib/utils";
+import { buildCardKey, normalizePinyin, normalizeText } from "@/lib/utils";
 
 export interface CardAudioEngine {
   play(card: Card): Promise<CardAudioPlaybackResult>;
@@ -67,21 +67,43 @@ class WavCardAudioEngine implements CardAudioEngine {
   private manifestEntryCache = new Map<string, AudioManifestEntry | null>();
 
   private stopCurrentAudio() {
-    if (this.audioElement) {
-      this.audioElement.pause();
-      this.audioElement.src = "";
-      this.audioElement = null;
+    const audio = this.audioElement;
+    if (!audio) {
+      return;
     }
+
+    // Detach handlers before clearing src. Some browsers emit an asynchronous
+    // error for the cleared element; that stale event must not stop the next
+    // audio instance created immediately afterwards.
+    this.audioElement = null;
+    audio.onended = null;
+    audio.onerror = null;
+    audio.pause();
+    audio.removeAttribute("src");
+    audio.load();
   }
 
-  private async getManifestEntry(card: Card) {
+  private getManifestEntry(card: Card, manifest: AudioManifest) {
     const key = buildCardKey(card);
     if (this.manifestEntryCache.has(key)) {
       return this.manifestEntryCache.get(key) ?? null;
     }
 
-    const manifest = await loadAudioManifest();
-    const entry = manifest?.entries?.[key] ?? null;
+    const exactEntry = manifest.entries?.[key] ?? null;
+    const normalizedHanzi = normalizeText(card.hanzi);
+    const normalizedPinyin = normalizePinyin(card.pinyin);
+    const matchingHanziEntries = exactEntry
+      ? []
+      : Object.values(manifest.entries ?? {}).filter(
+          (candidate) => normalizeText(candidate.hanzi) === normalizedHanzi,
+        );
+    const entry =
+      exactEntry ??
+      matchingHanziEntries.find(
+        (candidate) => normalizePinyin(candidate.pinyin) === normalizedPinyin,
+      ) ??
+      matchingHanziEntries[0] ??
+      null;
     this.manifestEntryCache.set(key, entry);
     return entry;
   }
@@ -91,25 +113,45 @@ class WavCardAudioEngine implements CardAudioEngine {
       return false;
     }
 
+    let audio: HTMLAudioElement | null = null;
+
     try {
       this.stopCurrentAudio();
-      const audio = new Audio(url);
+      const activeAudio = new Audio(url);
+      audio = activeAudio;
 
-      audio.onended = () => this.stopCurrentAudio();
-      audio.onerror = () => this.stopCurrentAudio();
+      const releaseAudio = () => {
+        // Ignore late events from an older element after a new playback has
+        // already started.
+        if (this.audioElement !== activeAudio) {
+          return;
+        }
 
-      this.audioElement = audio;
+        this.audioElement = null;
+        activeAudio.onended = null;
+        activeAudio.onerror = null;
+      };
 
-      await audio.play();
+      activeAudio.preload = "auto";
+      activeAudio.onended = releaseAudio;
+      activeAudio.onerror = releaseAudio;
+
+      this.audioElement = activeAudio;
+
+      await activeAudio.play();
       return true;
     } catch {
-      this.stopCurrentAudio();
+      if (this.audioElement === audio) {
+        this.stopCurrentAudio();
+      }
       return false;
     }
   }
 
   async play(card: Card): Promise<CardAudioPlaybackResult> {
-    const manifest = await loadAudioManifest();
+    // Avoid crossing an async boundary before audio.play() after preload: the
+    // browser ties playback permission to the current user click.
+    const manifest = audioManifest ?? (await loadAudioManifest());
     if (!manifest) {
       return {
         played: false,
@@ -118,7 +160,7 @@ class WavCardAudioEngine implements CardAudioEngine {
       };
     }
 
-    const entry = await this.getManifestEntry(card);
+    const entry = this.getManifestEntry(card, manifest);
     if (!entry?.path) {
       return {
         played: false,
