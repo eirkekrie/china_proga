@@ -14,6 +14,7 @@ import type { Card, CardStatus, DerivedCard, LearningStage, LessonSummary } from
 
 type FilterValue = "all" | CardStatus | "hard";
 type SortValue = "due" | "forgetting" | "memory" | "time" | "alphabetical";
+const CARD_PAGE_SIZE = 40;
 type LessonChoice = "unassigned" | "new" | string;
 type CardFormState = {
   hanzi: string;
@@ -130,6 +131,7 @@ export function CardsTable() {
   const [editForm, setEditForm] = useState<CardFormState | null>(null);
   const [bulkLessonChoice, setBulkLessonChoice] = useState<LessonChoice>("unassigned");
   const [bulkNewLessonTitle, setBulkNewLessonTitle] = useState("");
+  const [displayedLimit, setDisplayedLimit] = useState(CARD_PAGE_SIZE);
   const deferredSearch = useDeferredValue(search);
 
   const visibleCards = useMemo(() => {
@@ -162,12 +164,19 @@ export function CardsTable() {
 
   const visibleIds = useMemo(() => visibleCards.map((card) => card.id), [visibleCards]);
   const visibleIdSet = useMemo(() => new Set(visibleIds), [visibleIds]);
+  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const displayedCards = visibleCards.slice(0, displayedLimit);
   const selectedVisibleIds = selectedIds.filter((id) => visibleIdSet.has(id));
-  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIdSet.has(id));
 
   useEffect(() => {
     setSelectedIds([]);
+    setDisplayedLimit(CARD_PAGE_SIZE);
   }, [deferredSearch, statusFilter, stageFilter]);
+
+  useEffect(() => {
+    setDisplayedLimit(CARD_PAGE_SIZE);
+  }, [sortBy]);
 
   useEffect(() => {
     setSelectedIds((previous) => previous.filter((id) => filteredCards.some((card) => card.id === id)));
@@ -338,7 +347,7 @@ export function CardsTable() {
                 checked={allVisibleSelected}
                 onChange={toggleAllVisible}
               />
-              Все видимые: {visibleCards.length}
+              Все по фильтру: {visibleCards.length}
             </label>
             <span className="pill">Выбрано: {selectedVisibleIds.length}</span>
             <button type="button" className="btn-ghost" onClick={() => setSelectedIds([])}>
@@ -393,15 +402,15 @@ export function CardsTable() {
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
-        {visibleCards.map((card) => (
-          <article key={card.id} className="glass-panel p-5 sm:p-6">
+        {displayedCards.map((card) => (
+          <article key={card.id} className="card-library-item glass-panel p-5 sm:p-6">
             <div className="flex flex-col gap-4">
               <div className="flex items-start justify-between gap-4">
                 <label className="flex min-w-0 items-start gap-3">
                   <input
                     type="checkbox"
                     className="mt-3 h-4 w-4 shrink-0 accent-[rgb(var(--accent))]"
-                    checked={selectedIds.includes(card.id)}
+                    checked={selectedIdSet.has(card.id)}
                     onChange={() => toggleCard(card.id)}
                   />
                   <span className="min-w-0">
@@ -506,6 +515,21 @@ export function CardsTable() {
           <div className="glass-panel p-8 text-sm muted-text">По текущим фильтрам карточки не найдены.</div>
         ) : null}
       </section>
+
+      {displayedCards.length < visibleCards.length ? (
+        <div className="glass-panel flex flex-wrap items-center justify-between gap-3 p-4 sm:px-6">
+          <p className="text-sm muted-text">
+            Показано {displayedCards.length} из {visibleCards.length}
+          </p>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => setDisplayedLimit((current) => current + CARD_PAGE_SIZE)}
+          >
+            Показать ещё {Math.min(CARD_PAGE_SIZE, visibleCards.length - displayedCards.length)}
+          </button>
+        </div>
+      ) : null}
 
       {editingCard && editForm ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4 backdrop-blur-sm">

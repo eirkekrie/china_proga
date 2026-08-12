@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CopyButton } from "@/components/copy-button";
 import { HanziHandwritingAnswer } from "@/components/hanzi-handwriting-answer";
 import { HanziWritingPractice } from "@/components/hanzi-writing-practice";
 import { LessonPicker } from "@/components/lesson-picker";
+import { StudySessionTimer } from "@/components/study-session-timer";
 import { useStudy } from "@/context/study-context";
 import { cardAudioEngine, preloadCardAudioManifest } from "@/lib/audio";
 import {
@@ -109,7 +110,6 @@ function getLearnOptionClass(active: boolean) {
 
 export function StudySession({ flow, title, description }: StudySessionProps) {
   const {
-    addStudyTime,
     answerCard,
     availableLessons,
     getQueue,
@@ -117,7 +117,6 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
     metrics,
     resetLessonProgress,
     selectedLessonId,
-    stats,
   } = useStudy();
   const [newWordsPerSession, setNewWordsPerSession] = useState<(typeof NEW_WORD_LIMIT_OPTIONS)[number]>(5);
   const [activeWindowSize, setActiveWindowSize] = useState<(typeof ACTIVE_WINDOW_OPTIONS)[number]>(12);
@@ -132,19 +131,35 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
       : availableLessons.find((lesson) => lesson.id === selectedLessonId)?.title ?? "урока";
   const remainingNewSlots = Math.max(0, newWordsPerSession - introducedNewIds.length);
   const queueNewLimit = newWordsPerSession === 0 ? 0 : Math.max(remainingNewSlots, 1);
-  const queueOptions =
-    flow === "learn"
-      ? {
-          activeLimit: activeWindowSize,
-          learnMode,
-          newLimit: queueNewLimit,
-          reviewLimit: Math.max(0, activeWindowSize - remainingNewSlots),
-        }
-      : undefined;
-  const scheduledQueue = getQueue(flow, undefined, queueOptions);
-  const manualReviewQueue = flow === "review" ? getQueue("test") : [];
+  const scheduledQueue = useMemo(
+    () =>
+      getQueue(
+        flow,
+        undefined,
+        flow === "learn"
+          ? {
+              activeLimit: activeWindowSize,
+              learnMode,
+              newLimit: queueNewLimit,
+              reviewLimit: Math.max(0, activeWindowSize - remainingNewSlots),
+            }
+          : undefined,
+      ),
+    [activeWindowSize, flow, getQueue, learnMode, queueNewLimit, remainingNewSlots],
+  );
+  const manualReviewQueue = useMemo(
+    () => (flow === "review" ? getQueue("test") : []),
+    [flow, getQueue],
+  );
   const baseQueue = flow === "review" && manualReviewEnabled ? manualReviewQueue : scheduledQueue;
-  const queue = baseQueue.filter((card) => !postponedIds.includes(card.id));
+  const queue = useMemo(() => {
+    if (postponedIds.length === 0) {
+      return baseQueue;
+    }
+
+    const postponedIdSet = new Set(postponedIds);
+    return baseQueue.filter((card) => !postponedIdSet.has(card.id));
+  }, [baseQueue, postponedIds]);
   const recentWindowSize = flow === "review" ? REVIEW_ROTATION_WINDOW : LEARN_ROTATION_WINDOW;
   const rotationWindowSize = flow === "review" ? REVIEW_ROTATION_WINDOW : LEARN_ROTATION_WINDOW;
 
@@ -161,7 +176,6 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
   const [isAdvancing, setIsAdvancing] = useState(false);
   const [presentationTick, setPresentationTick] = useState(0);
   const startedAtRef = useRef(0);
-  const addStudyTimeRef = useRef(addStudyTime);
   const advanceTimerRef = useRef<number | null>(null);
   const queueRef = useRef(queue);
   const cooldownIdsRef = useRef(cooldownIds);
@@ -223,20 +237,6 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
     setShowHandwritingPad(false);
     setIsAdvancing(false);
   }, [currentCard?.id, presentationTick]);
-
-  useEffect(() => {
-    addStudyTimeRef.current = addStudyTime;
-  }, [addStudyTime]);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      if (!document.hidden) {
-        addStudyTimeRef.current(1000);
-      }
-    }, 1000);
-
-    return () => window.clearInterval(timer);
-  }, []);
 
   useEffect(() => {
     return () => {
@@ -476,7 +476,7 @@ export function StudySession({ flow, title, description }: StudySessionProps) {
         <div className="study-header-metrics">
           <span><small>В очереди</small><strong>{queue.length}</strong></span>
           <span><small>Сегодня</small><strong>{metrics.dueTodayCount}</strong></span>
-          <span><small>Сессия</small><strong>{formatDuration(stats.sessionStudyTime)}</strong></span>
+          <span><small>Сессия</small><strong><StudySessionTimer /></strong></span>
         </div>
         {flow === "learn" ? (
           <details className="session-settings">

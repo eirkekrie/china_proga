@@ -81,6 +81,7 @@ const SERVER_STATE_ENABLED = process.env.NEXT_PUBLIC_DISABLE_SERVER_STATE !== "1
 const HYDRATION_REQUEST_TIMEOUT_MS = 10000;
 
 const StudyContext = createContext<StudyContextValue | null>(null);
+const SELECTED_LESSON_STORAGE_KEY = "hanzi-flow:selected-lesson";
 
 async function fetchWithTimeout(input: string, init: RequestInit = {}, timeoutMs = HYDRATION_REQUEST_TIMEOUT_MS) {
   const controller = new AbortController();
@@ -97,7 +98,7 @@ async function fetchWithTimeout(input: string, init: RequestInit = {}, timeoutMs
 }
 
 export function StudyProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<PersistedAppState>(loadPersistedState());
+  const [state, setState] = useState<PersistedAppState>(createSeedState);
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [authStatus, setAuthStatus] = useState<AuthStatus>(SERVER_STATE_ENABLED ? "checking" : "authenticated");
   const [selectedLessonId, setSelectedLessonId] = useState(ALL_LESSONS_ID);
@@ -117,6 +118,14 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     }
 
     applyState(cached);
+    try {
+      const savedLessonId = window.localStorage.getItem(SELECTED_LESSON_STORAGE_KEY);
+      if (savedLessonId) {
+        setSelectedLessonId(savedLessonId);
+      }
+    } catch {
+      // The app still works when browser storage is unavailable.
+    }
     setHydrated(true);
 
     async function syncServerState() {
@@ -205,7 +214,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     }
 
     if (stateChanged) {
-      savePersistedState(state);
+      savePersistedState(state, serialized);
       persistedJsonRef.current = serialized;
 
       if (SERVER_STATE_ENABLED && authStatus !== "authenticated") {
@@ -252,6 +261,16 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     document.documentElement.classList.toggle("dark", state.theme === "dark");
   }, [state.theme]);
 
+  useEffect(() => {
+    if (hydrated) {
+      try {
+        window.localStorage.setItem(SELECTED_LESSON_STORAGE_KEY, selectedLessonId);
+      } catch {
+        // Keep the in-memory selection when browser storage is unavailable.
+      }
+    }
+  }, [hydrated, selectedLessonId]);
+
   const availableLessons = useMemo(() => buildAvailableLessons(state.cards), [state.cards]);
   const filteredCards = useMemo(
     () =>
@@ -260,7 +279,10 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         : state.cards.filter((card) => card.lessonId === selectedLessonId),
     [selectedLessonId, state.cards],
   );
-  const metrics = computeDashboard(filteredCards, state.stats, new Date());
+  const metrics = useMemo(
+    () => computeDashboard(filteredCards, state.stats, new Date()),
+    [filteredCards, state.stats],
+  );
 
   useEffect(() => {
     if (

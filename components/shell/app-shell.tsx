@@ -44,7 +44,7 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   const Icon = item.icon;
 
   return (
-    <Link href={item.href} className={["nav-chip", active ? "is-active" : ""].join(" ")}>
+    <Link prefetch={false} href={item.href} className={["nav-chip", active ? "is-active" : ""].join(" ")}>
       <Icon size={17} />
       <span>{item.label}</span>
     </Link>
@@ -65,7 +65,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <header className="mobile-header app-header sticky top-0 z-40 border-b lg:hidden">
         <div className="flex items-center justify-between gap-3 px-4 py-3">
-          <Link href="/" className="brand-lockup">
+          <Link prefetch={false} href="/" className="brand-lockup">
             <span className="brand-mark">漢</span>
             <span>
               <span className="brand-name">Hanzi Flow</span>
@@ -74,7 +74,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Link>
           <div className="flex items-center gap-2">
             {hydrated && metrics.dueTodayCount > 0 ? (
-              <Link href="/review" className="top-stat" aria-label="Карточки к повторению">
+              <Link prefetch={false} href="/review" className="top-stat" aria-label="Карточки к повторению">
                 <Flame size={14} />
                 <strong>{metrics.dueTodayCount}</strong>
               </Link>
@@ -89,6 +89,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               return (
                 <Link
                   key={item.href}
+                  prefetch={false}
                   href={item.href}
                   className={["nav-chip", pathname === item.href ? "is-active" : ""].join(" ")}
                 >
@@ -106,7 +107,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <aside className="desktop-sidebar hidden lg:flex">
         <div>
-          <Link href="/" className="brand-lockup px-1">
+          <Link prefetch={false} href="/" className="brand-lockup px-1">
             <span className="brand-mark">漢</span>
             <span>
               <span className="brand-name">Hanzi Flow</span>

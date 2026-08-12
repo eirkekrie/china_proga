@@ -3,11 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { HandwritingAnswerState } from "@/components/hanzi-handwriting-answer";
 import { HanziSimilarityAnswer } from "@/components/hanzi-similarity-answer";
+import { StudySessionTimer } from "@/components/study-session-timer";
 import { useStudy } from "@/context/study-context";
 import { cardAudioEngine, preloadCardAudioManifest } from "@/lib/audio";
 import { STAGE_LABELS, STAGE_SHORT_LABELS, UNASSIGNED_LESSON_ID } from "@/lib/constants";
 import { getEffectiveCardState } from "@/lib/learning";
-import { compareAnswer, formatDuration, shuffleArray } from "@/lib/utils";
+import { compareAnswer, shuffleArray } from "@/lib/utils";
 import type { Card, DerivedCard, LearningStage, ReviewGrade, TestOption } from "@/lib/types";
 
 const modes: LearningStage[] = [
@@ -75,7 +76,7 @@ function getVisibleLessonTitle(card: DerivedCard) {
 }
 
 export function TestSession() {
-  const { addStudyTime, answerCard, filteredCards, hydrated, selectedLessonId, stats } = useStudy();
+  const { answerCard, filteredCards, hydrated, selectedLessonId } = useStudy();
   const [mode, setMode] = useState<LearningStage>("hanzi_to_translation");
   const [translationAnswerMode, setTranslationAnswerMode] = useState<"choice" | "handwriting">("choice");
   const testCards = useMemo(
@@ -99,7 +100,6 @@ export function TestSession() {
   const [audioSource, setAudioSource] = useState<keyof typeof AUDIO_SOURCE_LABELS | null>(null);
   const [handwritingState, setHandwritingState] = useState<TestHandwritingState | null>(null);
   const startedAtRef = useRef(0);
-  const addStudyTimeRef = useRef(addStudyTime);
   const completedIdSet = useMemo(() => new Set(completedIds), [completedIds]);
 
   const currentCard =
@@ -191,21 +191,7 @@ export function TestSession() {
   }, [filteredCards, currentCard?.id, mode]);
 
   useEffect(() => {
-    addStudyTimeRef.current = addStudyTime;
-  }, [addStudyTime]);
-
-  useEffect(() => {
     preloadCardAudioManifest();
-  }, []);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      if (!document.hidden) {
-        addStudyTimeRef.current(1000);
-      }
-    }, 1000);
-
-    return () => window.clearInterval(timer);
   }, []);
 
   function markHintUsed(kind: keyof HintFlags) {
@@ -417,7 +403,7 @@ export function TestSession() {
           </div>
           <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 text-sm">
             <p className="muted-text">Сессия</p>
-            <p className="mt-2 text-2xl font-semibold">{formatDuration(stats.sessionStudyTime)}</p>
+            <StudySessionTimer className="mt-2 block text-2xl font-semibold" />
           </div>
         </div>
       </section>

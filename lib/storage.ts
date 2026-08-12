@@ -249,8 +249,13 @@ export function loadPersistedState(): PersistedAppState {
   }
 }
 
-export function savePersistedState(state: PersistedAppState) {
+export function savePersistedState(state: PersistedAppState, serializedState?: string) {
   if (typeof window === "undefined") {
+    return;
+  }
+
+  if (serializedState) {
+    window.localStorage.setItem(STORAGE_KEY, serializedState);
     return;
   }
 

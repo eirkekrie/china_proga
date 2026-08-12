@@ -1,11 +1,11 @@
 ﻿"use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { cardAudioEngine } from "@/lib/audio";
+import { StudySessionTimer } from "@/components/study-session-timer";
 import { useStudy } from "@/context/study-context";
 import { UNASSIGNED_LESSON_ID } from "@/lib/constants";
 import { buildToneExercises } from "@/lib/tone-training";
-import { formatDuration } from "@/lib/utils";
 import type { ToneExercise, ToneTrainingMode } from "@/lib/types";
 
 const AUDIO_SOURCE_LABELS = {
@@ -49,7 +49,7 @@ function getVisibleLessonTitle(card: { lessonId: string; lessonTitle: string } |
 }
 
 export function ToneTrainingSession() {
-  const { addStudyTime, filteredCards, hydrated, stats } = useStudy();
+  const { filteredCards, hydrated } = useStudy();
   const [mode, setMode] = useState<ToneTrainingMode>("tone_number");
   const [exercisePool, setExercisePool] = useState<ToneExercise[]>([]);
   const [currentExerciseId, setCurrentExerciseId] = useState<string | null>(null);
@@ -60,7 +60,6 @@ export function ToneTrainingSession() {
   const [audioSource, setAudioSource] = useState<keyof typeof AUDIO_SOURCE_LABELS | null>(null);
   const [sessionCompleted, setSessionCompleted] = useState(0);
   const [sessionCorrect, setSessionCorrect] = useState(0);
-  const addStudyTimeRef = useRef(addStudyTime);
 
   const queue = exercisePool.filter((exercise) => exercise.mode === mode);
   const currentExercise =
@@ -103,20 +102,6 @@ export function ToneTrainingSession() {
     setAudioNotice(null);
     setAudioSource(null);
   }, [currentExercise?.id]);
-
-  useEffect(() => {
-    addStudyTimeRef.current = addStudyTime;
-  }, [addStudyTime]);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      if (!document.hidden) {
-        addStudyTimeRef.current(1000);
-      }
-    }, 1000);
-
-    return () => window.clearInterval(timer);
-  }, []);
 
   async function handlePreview() {
     if (!currentCard) {
@@ -190,7 +175,7 @@ export function ToneTrainingSession() {
         </div>
         <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 text-sm">
           <p className="muted-text">Сессия</p>
-          <p className="mt-2 text-2xl font-semibold">{formatDuration(stats.sessionStudyTime)}</p>
+          <StudySessionTimer className="mt-2 block text-2xl font-semibold" />
         </div>
       </section>
 
